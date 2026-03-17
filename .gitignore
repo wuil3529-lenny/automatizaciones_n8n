@@ -1,0 +1,14 @@
+# n8n temporary files
+~$*.xlsx
+*.tmp
+
+# Excel lock files
+.~lock.*
+
+# OS files
+Thumbs.db
+.DS_Store
+
+# Credentials (if any were stored locally)
+.env
+secret.json

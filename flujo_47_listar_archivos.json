@@ -1,0 +1,53 @@
+{
+  "name": "flujo_47_listar_archivos",
+  "nodes": [
+    {
+      "parameters": {},
+      "id": "trigger_v47",
+      "name": "Execute Workflow Trigger",
+      "type": "n8n-nodes-base.executeWorkflowTrigger",
+      "typeVersion": 1,
+      "position": [0, 300]
+    },
+    {
+      "parameters": {
+        "filePath": "C:/Users/admin/.n8n-files/lista.csv"
+      },
+      "id": "read_csv_v47",
+      "name": "Leer Registro CSV",
+      "type": "n8n-nodes-base.readBinaryFile",
+      "typeVersion": 1,
+      "position": [200, 300],
+      "onError": "continueErrorOutput"
+    },
+    {
+      "parameters": {
+        "options": {
+          "headerRow": true,
+          "readAsString": true
+        }
+      },
+      "id": "csv_to_json",
+      "name": "Parsear CSV",
+      "type": "n8n-nodes-base.spreadsheetFile",
+      "typeVersion": 1,
+      "position": [400, 300],
+      "onError": "continueErrorOutput"
+    },
+    {
+      "parameters": {
+        "jsCode": "/**\n * LISTADOR ROBUSTO v47.23 - EXTRACCIÓN ULTRA-FLEXIBLE\n */\nconst items = $input.all();\nconst archivos = [];\n\nfor (let i = 0; i < items.length; i++) {\n    const j = items[i].json;\n    // Busqueda \"ciega\": miramos todos los valores de todas las propiedades\n    Object.keys(j).forEach(key => {\n        const valor = j[key];\n        if (valor && typeof valor === 'string' && valor.toLowerCase().indexOf('.xlsx') !== -1) {\n            if (valor.indexOf('~$') === -1) {\n                archivos.push(valor.trim());\n            }\n        }\n    });\n}\n\n// Limpiar duplicados de forma compatible\nconst unicos = [];\narchivos.forEach(a => { if(unicos.indexOf(a) === -1) unicos.push(a); });\n\nreturn [{\n  json: {\n    estado: unicos.length > 0 ? \"EXITO\" : \"ADVERTENCIA\",\n    conteo: unicos.length,\n    archivos: unicos,\n    lista_texto: unicos.length > 0 \n      ? \"Archivos detectados: \" + unicos.join(', ') \n      : \"No se encontraron nombres válidos en el archivo procesado.\"\n  }\n}];"
+      },
+      "id": "format_list_v47",
+      "name": "Formatear Lista",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 1,
+      "position": [600, 300]
+    }
+  ],
+  "connections": {
+    "Execute Workflow Trigger": { "main": [[{ "node": "read_csv_v47", "type": "main", "index": 0 }]] },
+    "read_csv_v47": { "main": [[{ "node": "csv_to_json", "type": "main", "index": 0 }]] },
+    "csv_to_json": { "main": [[{ "node": "format_list_v47", "type": "main", "index": 0 }]] }
+  }
+}
