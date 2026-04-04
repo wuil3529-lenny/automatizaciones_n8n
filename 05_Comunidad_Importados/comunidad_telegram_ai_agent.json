@@ -1,0 +1,934 @@
+{
+    "nodes": [
+        {
+            "parameters": {
+                "updates": [
+                    "message"
+                ],
+                "additionalFields": {}
+            },
+            "type": "n8n-nodes-base.telegramTrigger",
+            "typeVersion": 1.1,
+            "position": [
+                480,
+                640
+            ],
+            "id": "9ec8a80c-a182-4552-a04a-6dd6a5b91121",
+            "name": "Receive Message",
+            "webhookId": "97ad91b8-8d3c-4c40-b197-bd5e509538ba",
+            "credentials": {
+                "telegramApi": {
+                    "id": "YazVUHAkHrXUM1eI",
+                    "name": "Telegram account"
+                }
+            }
+        },
+        {
+            "parameters": {
+                "rules": {
+                    "values": [
+                        {
+                            "conditions": {
+                                "options": {
+                                    "caseSensitive": true,
+                                    "leftValue": "",
+                                    "typeValidation": "strict",
+                                    "version": 2
+                                },
+                                "conditions": [
+                                    {
+                                        "id": "f6d0a607-e0ad-49ba-9987-10ad2889b536",
+                                        "leftValue": "={{ $json.message.photo }}",
+                                        "rightValue": "",
+                                        "operator": {
+                                            "type": "array",
+                                            "operation": "exists",
+                                            "singleValue": true
+                                        }
+                                    }
+                                ],
+                                "combinator": "and"
+                            },
+                            "renameOutput": true,
+                            "outputKey": "image"
+                        },
+                        {
+                            "conditions": {
+                                "options": {
+                                    "caseSensitive": true,
+                                    "leftValue": "",
+                                    "typeValidation": "strict",
+                                    "version": 2
+                                },
+                                "conditions": [
+                                    {
+                                        "id": "2a9d7a90-7f2e-4228-84df-6476a2534a04",
+                                        "leftValue": "={{ $json.message.voice.file_id }}",
+                                        "rightValue": "",
+                                        "operator": {
+                                            "type": "string",
+                                            "operation": "exists",
+                                            "singleValue": true
+                                        }
+                                    }
+                                ],
+                                "combinator": "and"
+                            },
+                            "renameOutput": true,
+                            "outputKey": "voice"
+                        },
+                        {
+                            "conditions": {
+                                "options": {
+                                    "caseSensitive": true,
+                                    "leftValue": "",
+                                    "typeValidation": "strict",
+                                    "version": 2
+                                },
+                                "conditions": [
+                                    {
+                                        "leftValue": "={{ $json.message.text }}",
+                                        "rightValue": "",
+                                        "operator": {
+                                            "type": "string",
+                                            "operation": "exists",
+                                            "singleValue": true
+                                        }
+                                    }
+                                ],
+                                "combinator": "and"
+                            },
+                            "renameOutput": true,
+                            "outputKey": "text"
+                        }
+                    ]
+                },
+                "options": {}
+            },
+            "type": "n8n-nodes-base.switch",
+            "typeVersion": 3.2,
+            "position": [
+                680,
+                640
+            ],
+            "id": "f8d0af94-3429-409a-b609-8efce8e14a11",
+            "name": "Switch"
+        },
+        {
+            "parameters": {
+                "resource": "file",
+                "fileId": "={{ $json.message.voice.file_id }}"
+            },
+            "type": "n8n-nodes-base.telegram",
+            "typeVersion": 1.2,
+            "position": [
+                1080,
+                440
+            ],
+            "id": "779f4a65-6b73-4844-97e6-b8d39a3cafd6",
+            "name": "Get Audio File",
+            "credentials": {
+                "telegramApi": {
+                    "id": "YazVUHAkHrXUM1eI",
+                    "name": "Telegram account"
+                }
+            }
+        },
+        {
+            "parameters": {
+                "resource": "image",
+                "operation": "analyze",
+                "modelId": {
+                    "__rl": true,
+                    "value": "chatgpt-4o-latest",
+                    "mode": "list",
+                    "cachedResultName": "CHATGPT-4O-LATEST"
+                },
+                "text": "={{ $('Receive Message').item.json.message.caption || \"Describe this image\" }}",
+                "inputType": "base64",
+                "options": {}
+            },
+            "type": "@n8n/n8n-nodes-langchain.openAi",
+            "typeVersion": 1.8,
+            "position": [
+                1420,
+                120
+            ],
+            "id": "73c39cc7-9eab-468b-9b86-8eadc288615d",
+            "name": "Analyze Image",
+            "credentials": {
+                "openAiApi": {
+                    "id": "Tr33L9q2rUaxvyIC",
+                    "name": "OpenAi account"
+                }
+            }
+        },
+        {
+            "parameters": {
+                "jsCode": "const inputItem = items[0];\nconst extension = inputItem.binary.data.fileExtension;\ninputItem.binary.data.mimeType = `image/${extension}`;\nreturn inputItem;"
+            },
+            "type": "n8n-nodes-base.code",
+            "typeVersion": 2,
+            "position": [
+                1260,
+                120
+            ],
+            "id": "99b35d7f-dd1c-424a-9f40-a673e7e4b0fb",
+            "name": "Fix File Extension"
+        },
+        {
+            "parameters": {
+                "assignments": {
+                    "assignments": [
+                        {
+                            "id": "ec3a884f-480f-4462-9437-a7de0faed372",
+                            "name": "output",
+                            "value": "={{ $json.content }}",
+                            "type": "string"
+                        }
+                    ]
+                },
+                "options": {}
+            },
+            "type": "n8n-nodes-base.set",
+            "typeVersion": 3.4,
+            "position": [
+                1580,
+                120
+            ],
+            "id": "6a133361-ece8-492e-b620-170cdf010f2d",
+            "name": "Format Output"
+        },
+        {
+            "parameters": {
+                "assignments": {
+                    "assignments": [
+                        {
+                            "id": "88cbdd27-f094-458b-878f-60504b8c3ad7",
+                            "name": "text",
+                            "value": "={{ $json.message.text }}",
+                            "type": "string"
+                        }
+                    ]
+                },
+                "options": {}
+            },
+            "type": "n8n-nodes-base.set",
+            "typeVersion": 3.4,
+            "position": [
+                1080,
+                700
+            ],
+            "id": "7256fa77-435a-4d52-ad47-738ca131101e",
+            "name": "Agent Input"
+        },
+        {
+            "parameters": {
+                "conditions": {
+                    "options": {
+                        "caseSensitive": true,
+                        "leftValue": "",
+                        "typeValidation": "strict",
+                        "version": 2
+                    },
+                    "conditions": [
+                        {
+                            "id": "3d8b9900-fe93-48d3-a1cf-8fd70542f091",
+                            "leftValue": "={{ $('Receive Message').item.json.message.voice.file_id }}",
+                            "rightValue": "",
+                            "operator": {
+                                "type": "string",
+                                "operation": "exists",
+                                "singleValue": true
+                            }
+                        }
+                    ],
+                    "combinator": "and"
+                },
+                "options": {}
+            },
+            "type": "n8n-nodes-base.if",
+            "typeVersion": 2.2,
+            "position": [
+                2100,
+                380
+            ],
+            "id": "641054bc-d235-4e63-90d7-e457222daeba",
+            "name": "Audio Response?"
+        },
+        {
+            "parameters": {
+                "chatId": "={{ $('Receive Message').item.json.message.chat.id }}",
+                "text": "={{ $json.output }}",
+                "additionalFields": {
+                    "appendAttribution": false
+                }
+            },
+            "type": "n8n-nodes-base.telegram",
+            "typeVersion": 1.2,
+            "position": [
+                2340,
+                500
+            ],
+            "id": "13b0421b-e8d3-45a4-83dc-9f057cc12b1b",
+            "name": "Text Response",
+            "credentials": {
+                "telegramApi": {
+                    "id": "YazVUHAkHrXUM1eI",
+                    "name": "Telegram account"
+                }
+            }
+        },
+        {
+            "parameters": {
+                "resource": "audio",
+                "input": "={{ $json.output }}",
+                "voice": "nova",
+                "options": {}
+            },
+            "type": "@n8n/n8n-nodes-langchain.openAi",
+            "typeVersion": 1.8,
+            "position": [
+                2340,
+                280
+            ],
+            "id": "bd9d09c2-2f83-4c05-a8d9-3e56f51a74ad",
+            "name": "Generate Audio",
+            "disabled": true
+        },
+        {
+            "parameters": {
+                "operation": "sendAudio",
+                "chatId": "={{ $('Receive Message').item.json.message.chat.id }}",
+                "binaryData": true,
+                "additionalFields": {}
+            },
+            "type": "n8n-nodes-base.telegram",
+            "typeVersion": 1.2,
+            "position": [
+                2560,
+                280
+            ],
+            "id": "fb871cc1-422b-4196-9f69-416207ddbf57",
+            "name": "Audio Response",
+            "credentials": {
+                "telegramApi": {
+                    "id": "YazVUHAkHrXUM1eI",
+                    "name": "Telegram account"
+                }
+            }
+        },
+        {
+            "parameters": {
+                "resource": "file",
+                "fileId": "={{ $json.message.photo[2].file_id }}"
+            },
+            "type": "n8n-nodes-base.telegram",
+            "typeVersion": 1.2,
+            "position": [
+                1080,
+                120
+            ],
+            "id": "8c523cd4-536b-4cad-ac85-3b08132a3e35",
+            "name": "Download Image",
+            "credentials": {
+                "telegramApi": {
+                    "id": "YazVUHAkHrXUM1eI",
+                    "name": "Telegram account"
+                }
+            }
+        },
+        {
+            "parameters": {
+                "operation": "getAll",
+                "limit": 5,
+                "filters": {
+                    "labelIds": [
+                        "UNREAD",
+                        "INBOX"
+                    ]
+                }
+            },
+            "type": "n8n-nodes-base.gmailTool",
+            "typeVersion": 2.1,
+            "position": [
+                1080,
+                1060
+            ],
+            "id": "9a6960f8-e116-46d3-80cc-0e7270705f4d",
+            "name": "Get Emails",
+            "webhookId": "d2e64baa-5c0c-43cc-9117-77a74bd4358e",
+            "credentials": {
+                "gmailOAuth2": {
+                    "id": "grrUYJpxmBxn5RYW",
+                    "name": "Gmail account"
+                }
+            }
+        },
+        {
+            "parameters": {
+                "content": "## Agent Tools",
+                "height": 380,
+                "width": 960
+            },
+            "type": "n8n-nodes-base.stickyNote",
+            "typeVersion": 1,
+            "position": [
+                1020,
+                960
+            ],
+            "id": "06f8637a-7a6d-482d-8582-db50be1bb988",
+            "name": "Sticky Note"
+        },
+        {
+            "parameters": {
+                "content": "## Image Chat",
+                "height": 260,
+                "width": 760
+            },
+            "type": "n8n-nodes-base.stickyNote",
+            "typeVersion": 1,
+            "position": [
+                1000,
+                60
+            ],
+            "id": "4460b5f0-3400-4ba4-aa0d-12bbc54e7abd",
+            "name": "Sticky Note1"
+        },
+        {
+            "parameters": {
+                "content": "## Voice Chat",
+                "height": 240,
+                "width": 540
+            },
+            "type": "n8n-nodes-base.stickyNote",
+            "typeVersion": 1,
+            "position": [
+                960,
+                380
+            ],
+            "id": "6862cdbc-943b-49a5-85c9-77a8d53216d6",
+            "name": "Sticky Note2"
+        },
+        {
+            "parameters": {
+                "content": "## Text Chat",
+                "height": 240,
+                "width": 260
+            },
+            "type": "n8n-nodes-base.stickyNote",
+            "typeVersion": 1,
+            "position": [
+                1000,
+                640
+            ],
+            "id": "1458926d-27cd-45e7-ba42-63722b5d6059",
+            "name": "Sticky Note3"
+        },
+        {
+            "parameters": {
+                "content": "## Handle Responses",
+                "height": 480,
+                "width": 760
+            },
+            "type": "n8n-nodes-base.stickyNote",
+            "typeVersion": 1,
+            "position": [
+                2020,
+                220
+            ],
+            "id": "f3522692-774a-42a9-9adf-a31d16b9c29b",
+            "name": "Sticky Note4"
+        },
+        {
+            "parameters": {
+                "sendTo": "={{ $fromAI('recipient_email') }}",
+                "subject": "={{ $fromAI('email_subject') }}",
+                "emailType": "text",
+                "message": "={{ $fromAI('email_body') }}",
+                "options": {
+                    "appendAttribution": false
+                }
+            },
+            "type": "n8n-nodes-base.gmailTool",
+            "typeVersion": 2.1,
+            "position": [
+                1200,
+                1060
+            ],
+            "id": "3c8bced5-5558-420d-8d76-1663d1304ad9",
+            "name": "Send Email",
+            "webhookId": "33501ace-0ca0-44b3-b91b-bdb370df8401",
+            "credentials": {
+                "gmailOAuth2": {
+                    "id": "grrUYJpxmBxn5RYW",
+                    "name": "Gmail account"
+                }
+            }
+        },
+        {
+            "parameters": {
+                "operation": "getAll",
+                "calendar": {
+                    "__rl": true,
+                    "value": "sumit.bhimte@numerize.ai",
+                    "mode": "list",
+                    "cachedResultName": "sumit.bhimte@numerize.ai"
+                },
+                "options": {}
+            },
+            "type": "n8n-nodes-base.googleCalendarTool",
+            "typeVersion": 1.3,
+            "position": [
+                1320,
+                1060
+            ],
+            "id": "049fa5b8-db73-4d96-9d09-c6d35967a4ec",
+            "name": "Get Calendar",
+            "credentials": {
+                "googleCalendarOAuth2Api": {
+                    "id": "fOVL5bFRFm6VcFDm",
+                    "name": "Google Calendar account 2"
+                }
+            }
+        },
+        {
+            "parameters": {
+                "calendar": {
+                    "__rl": true,
+                    "value": "sumit.bhimte@numerize.ai",
+                    "mode": "list",
+                    "cachedResultName": "sumit.bhimte@numerize.ai"
+                },
+                "start": "={{ $fromAI('start', \"Date and time when the event should start\") }}",
+                "end": "={{ $fromAI('end', \"Date and time when the event should end\") }}",
+                "additionalFields": {
+                    "description": "={{ $fromAI('description', \"Description of the event\") }}",
+                    "summary": "={{ $fromAI('title', \"Title of the event\") }}"
+                }
+            },
+            "type": "n8n-nodes-base.googleCalendarTool",
+            "typeVersion": 1.3,
+            "position": [
+                1440,
+                1060
+            ],
+            "id": "572cbcd2-58e2-43f0-972c-a6015b697c3f",
+            "name": "Set Calendar",
+            "credentials": {
+                "googleCalendarOAuth2Api": {
+                    "id": "fOVL5bFRFm6VcFDm",
+                    "name": "Google Calendar account 2"
+                }
+            }
+        },
+        {
+            "parameters": {
+                "content": "## AI Agent",
+                "height": 460,
+                "width": 380
+            },
+            "type": "n8n-nodes-base.stickyNote",
+            "typeVersion": 1,
+            "position": [
+                1580,
+                420
+            ],
+            "id": "cdf6552c-e2aa-4077-8155-e8d1504a0c02",
+            "name": "Sticky Note5"
+        },
+        {
+            "parameters": {
+                "options": {}
+            },
+            "type": "@n8n/n8n-nodes-langchain.embeddingsOpenAi",
+            "typeVersion": 1.2,
+            "position": [
+                1580,
+                1220
+            ],
+            "id": "0636f14e-3a14-4cc7-ac09-06d633ca5250",
+            "name": "Embeddings OpenAI",
+            "disabled": true
+        },
+        {
+            "parameters": {
+                "mode": "retrieve-as-tool",
+                "toolName": "n8n",
+                "toolDescription": "Use this tool to retrieve email addresses of contacts.",
+                "pineconeIndex": {
+                    "__rl": true,
+                    "value": "n8n",
+                    "mode": "list",
+                    "cachedResultName": "n8n"
+                },
+                "options": {
+                    "pineconeNamespace": "contacts"
+                }
+            },
+            "type": "@n8n/n8n-nodes-langchain.vectorStorePinecone",
+            "typeVersion": 1,
+            "position": [
+                1560,
+                1040
+            ],
+            "id": "ded61a5a-b6fc-42ab-ae51-a9eac9efea52",
+            "name": "Contacts",
+            "disabled": true
+        },
+        {
+            "parameters": {
+                "options": {}
+            },
+            "type": "@n8n/n8n-nodes-langchain.toolSerpApi",
+            "typeVersion": 1,
+            "position": [
+                1840,
+                1060
+            ],
+            "id": "effe467e-6574-495b-9696-9ed4000af58a",
+            "name": "Google Search",
+            "credentials": {
+                "serpApi": {
+                    "id": "NseIXwHxhOEFAuXa",
+                    "name": "SerpAPI account"
+                }
+            }
+        },
+        {
+            "parameters": {
+                "promptType": "define",
+                "text": "={{ $json.text }}",
+                "options": {
+                    "systemMessage": "=# ROLE\nYou are a helpful assistant\nYour name is Sam. Response in a friendly and helpful tone.\n\n# Important Information\nYou are speaking to {{ $('Switch').item.json.message.from.first_name }}\nCurrent date and time: {{ $now }}\n\n# Tools\n## Get Emails\nUse this tool to retrieve any unread emails from Gmail.\nIn your response, provide the following:\n- a summary of the body content\n- the from email address\n- the name of the person\n\n## Send Email\nUse this tool to send an email. It requires the recipient email address, subject and email body.\n\n## Get Calendar\nUse this tool to retrieve calendar events.\n\n## Set Calendar\nUse this tool to create new calendar events\n\n## Contacts\nUse this tool to retrieve contacts information about contacts, like their email addresses"
+                }
+            },
+            "type": "@n8n/n8n-nodes-langchain.agent",
+            "typeVersion": 1.7,
+            "position": [
+                1640,
+                500
+            ],
+            "id": "0c48d0f1-c26e-4584-8953-c46e90f3f5f2",
+            "name": "AI Agent1"
+        },
+        {
+            "parameters": {
+                "sessionIdType": "customKey",
+                "sessionKey": "={{ $('Receive Message').item.json.message.chat.id }}",
+                "contextWindowLength": 20
+            },
+            "type": "@n8n/n8n-nodes-langchain.memoryBufferWindow",
+            "typeVersion": 1.3,
+            "position": [
+                1860,
+                680
+            ],
+            "id": "9aa4da2b-3ad0-473c-be24-dce5247047ae",
+            "name": "Window Buffer Memory1"
+        },
+        {
+            "parameters": {
+                "modelName": "models/gemini-2.5-flash-preview-04-17",
+                "options": {}
+            },
+            "type": "@n8n/n8n-nodes-langchain.lmChatGoogleGemini",
+            "typeVersion": 1,
+            "position": [
+                1640,
+                680
+            ],
+            "id": "3e088a51-fd40-4a73-b31c-98ea4a80bc88",
+            "name": "Google Gemini Chat Model1",
+            "credentials": {
+                "googlePalmApi": {
+                    "id": "VxPoX0twc6QONqYL",
+                    "name": "Google Gemini(PaLM) Api account"
+                }
+            }
+        },
+        {
+            "parameters": {
+                "method": "POST",
+                "url": "https://speech.googleapis.com/v1/speech:recognize",
+                "authentication": "predefinedCredentialType",
+                "nodeCredentialType": "googlePalmApi",
+                "options": {}
+            },
+            "type": "n8n-nodes-base.httpRequest",
+            "typeVersion": 4.2,
+            "position": [
+                1320,
+                440
+            ],
+            "id": "6d0b2533-80e0-4949-81c8-8f4c5c0c7880",
+            "name": "HTTP Request",
+            "credentials": {
+                "googlePalmApi": {
+                    "id": "VxPoX0twc6QONqYL",
+                    "name": "Google Gemini(PaLM) Api account"
+                }
+            },
+            "disabled": true
+        }
+    ],
+    "connections": {
+        "Receive Message": {
+            "main": [
+                [
+                    {
+                        "node": "Switch",
+                        "type": "main",
+                        "index": 0
+                    }
+                ]
+            ]
+        },
+        "Switch": {
+            "main": [
+                [
+                    {
+                        "node": "Download Image",
+                        "type": "main",
+                        "index": 0
+                    }
+                ],
+                [
+                    {
+                        "node": "Get Audio File",
+                        "type": "main",
+                        "index": 0
+                    }
+                ],
+                [
+                    {
+                        "node": "Agent Input",
+                        "type": "main",
+                        "index": 0
+                    }
+                ]
+            ]
+        },
+        "Get Audio File": {
+            "main": [
+                [
+                    {
+                        "node": "HTTP Request",
+                        "type": "main",
+                        "index": 0
+                    }
+                ]
+            ]
+        },
+        "Analyze Image": {
+            "main": [
+                [
+                    {
+                        "node": "Format Output",
+                        "type": "main",
+                        "index": 0
+                    }
+                ]
+            ]
+        },
+        "Fix File Extension": {
+            "main": [
+                [
+                    {
+                        "node": "Analyze Image",
+                        "type": "main",
+                        "index": 0
+                    }
+                ]
+            ]
+        },
+        "Format Output": {
+            "main": [
+                [
+                    {
+                        "node": "Text Response",
+                        "type": "main",
+                        "index": 0
+                    }
+                ]
+            ]
+        },
+        "Agent Input": {
+            "main": [
+                [
+                    {
+                        "node": "AI Agent1",
+                        "type": "main",
+                        "index": 0
+                    }
+                ]
+            ]
+        },
+        "Audio Response?": {
+            "main": [
+                [
+                    {
+                        "node": "Generate Audio",
+                        "type": "main",
+                        "index": 0
+                    }
+                ],
+                [
+                    {
+                        "node": "Text Response",
+                        "type": "main",
+                        "index": 0
+                    }
+                ]
+            ]
+        },
+        "Generate Audio": {
+            "main": [
+                [
+                    {
+                        "node": "Audio Response",
+                        "type": "main",
+                        "index": 0
+                    }
+                ]
+            ]
+        },
+        "Download Image": {
+            "main": [
+                [
+                    {
+                        "node": "Fix File Extension",
+                        "type": "main",
+                        "index": 0
+                    }
+                ]
+            ]
+        },
+        "Get Emails": {
+            "ai_tool": [
+                [
+                    {
+                        "node": "AI Agent1",
+                        "type": "ai_tool",
+                        "index": 0
+                    }
+                ]
+            ]
+        },
+        "Send Email": {
+            "ai_tool": [
+                [
+                    {
+                        "node": "AI Agent1",
+                        "type": "ai_tool",
+                        "index": 0
+                    }
+                ]
+            ]
+        },
+        "Get Calendar": {
+            "ai_tool": [
+                [
+                    {
+                        "node": "AI Agent1",
+                        "type": "ai_tool",
+                        "index": 0
+                    }
+                ]
+            ]
+        },
+        "Set Calendar": {
+            "ai_tool": [
+                [
+                    {
+                        "node": "AI Agent1",
+                        "type": "ai_tool",
+                        "index": 0
+                    }
+                ]
+            ]
+        },
+        "Embeddings OpenAI": {
+            "ai_embedding": [
+                [
+                    {
+                        "node": "Contacts",
+                        "type": "ai_embedding",
+                        "index": 0
+                    }
+                ]
+            ]
+        },
+        "Contacts": {
+            "ai_tool": [
+                [
+                    {
+                        "node": "AI Agent1",
+                        "type": "ai_tool",
+                        "index": 0
+                    }
+                ]
+            ]
+        },
+        "Google Search": {
+            "ai_tool": [
+                [
+                    {
+                        "node": "AI Agent1",
+                        "type": "ai_tool",
+                        "index": 0
+                    }
+                ]
+            ]
+        },
+        "AI Agent1": {
+            "main": [
+                [
+                    {
+                        "node": "Audio Response?",
+                        "type": "main",
+                        "index": 0
+                    }
+                ]
+            ]
+        },
+        "Window Buffer Memory1": {
+            "ai_memory": [
+                [
+                    {
+                        "node": "AI Agent1",
+                        "type": "ai_memory",
+                        "index": 0
+                    }
+                ]
+            ]
+        },
+        "Google Gemini Chat Model1": {
+            "ai_languageModel": [
+                [
+                    {
+                        "node": "AI Agent1",
+                        "type": "ai_languageModel",
+                        "index": 0
+                    }
+                ]
+            ]
+        },
+        "HTTP Request": {
+            "main": [
+                [
+                    {
+                        "node": "AI Agent1",
+                        "type": "main",
+                        "index": 0
+                    }
+                ]
+            ]
+        }
+    },
+    "pinData": {},
+    "meta": {
+        "templateCredsSetupCompleted": true,
+        "instanceId": "6192ff7466a61fc9d17deb40b486e8c2f5cd0292b287d612ac475417f711bcd2"
+    }
+}

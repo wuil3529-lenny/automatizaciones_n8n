@@ -1,0 +1,610 @@
+{
+  "name": "flujo_60_agente_excel",
+  "nodes": [
+    {
+      "parameters": {
+        "updates": [
+          "message"
+        ]
+      },
+      "id": "tg_trigger",
+      "name": "Telegram Trigger",
+      "type": "n8n-nodes-base.telegramTrigger",
+      "typeVersion": 1,
+      "position": [
+        -300,
+        300
+      ],
+      "credentials": {
+        "telegramApi": {
+          "id": "VnStY9rD8r8uW8vN",
+          "name": "Telegram account"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "amount": 2,
+        "unit": "seconds"
+      },
+      "id": "wait_spam",
+      "name": "Espera Antispam",
+      "type": "n8n-nodes-base.wait",
+      "typeVersion": 1,
+      "position": [
+        -100,
+        300
+      ]
+    },
+    {
+      "parameters": {
+        "values": {
+          "boolean": [
+            {
+              "name": "es_voz",
+              "value": "={{ !!$json.message.voice }}"
+            },
+            {
+              "name": "es_foto",
+              "value": "={{ !!$json.message.photo }}"
+            }
+          ]
+        }
+      },
+      "id": "deteccion_tipo",
+      "name": "Detectar Tipo",
+      "type": "n8n-nodes-base.set",
+      "typeVersion": 1,
+      "position": [
+        100,
+        300
+      ]
+    },
+    {
+      "parameters": {
+        "conditions": {
+          "boolean": [
+            {
+              "value1": "={{ $json.es_voz }}",
+              "value2": true
+            }
+          ]
+        }
+      },
+      "id": "si_es_voz",
+      "name": "¿Es Audio?",
+      "type": "n8n-nodes-base.if",
+      "typeVersion": 1,
+      "position": [
+        300,
+        150
+      ]
+    },
+    {
+      "parameters": {
+        "conditions": {
+          "boolean": [
+            {
+              "value1": "={{ $json.es_foto }}",
+              "value2": true
+            }
+          ]
+        }
+      },
+      "id": "si_es_foto",
+      "name": "¿Es Foto?",
+      "type": "n8n-nodes-base.if",
+      "typeVersion": 1,
+      "position": [
+        300,
+        450
+      ]
+    },
+    {
+      "parameters": {
+        "operation": "getFile",
+        "fileId": "={{ $('Telegram Trigger').item.json.message.voice.file_id }}"
+      },
+      "id": "bajar_audio",
+      "name": "Bajar Audio",
+      "type": "n8n-nodes-base.telegram",
+      "typeVersion": 1,
+      "position": [
+        500,
+        50
+      ],
+      "credentials": {
+        "telegramApi": {
+          "id": "VnStY9rD8r8uW8vN",
+          "name": "Telegram account"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "method": "POST",
+        "url": "https://api.groq.com/openai/v1/audio/transcriptions",
+        "sendHeaders": true,
+        "headerParameters": {
+          "parameters": [
+            {
+              "name": "Authorization",
+              "value": "Bearer TU_CLAVE_GROQ_AQUI"
+            }
+          ]
+        },
+        "sendBody": true,
+        "contentType": "multipart-form-data",
+        "bodyParameters": {
+          "parameters": [
+            {
+              "name": "model",
+              "value": "whisper-large-v3"
+            },
+            {
+              "name": "file",
+              "parameterType": "formBinaryData",
+              "inputDataFieldName": "data"
+            }
+          ]
+        }
+      },
+      "id": "groq_whisper",
+      "name": "Groq Whisper",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 3,
+      "position": [
+        700,
+        50
+      ]
+    },
+    {
+      "parameters": {
+        "operation": "getFile",
+        "fileId": "={{ $('Telegram Trigger').item.json.message.photo.reverse()[0].file_id }}"
+      },
+      "id": "bajar_foto",
+      "name": "Bajar Foto",
+      "type": "n8n-nodes-base.telegram",
+      "typeVersion": 1,
+      "position": [
+        500,
+        350
+      ],
+      "credentials": {
+        "telegramApi": {
+          "id": "VnStY9rD8r8uW8vN",
+          "name": "Telegram account"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "values": {
+          "string": [
+            {
+              "name": "entrada_usuario",
+              "value": "={{ $json.text }}"
+            }
+          ]
+        }
+      },
+      "id": "voz_a_texto",
+      "name": "Voz a Texto",
+      "type": "n8n-nodes-base.set",
+      "typeVersion": 1,
+      "position": [
+        900,
+        50
+      ]
+    },
+    {
+      "parameters": {
+        "values": {
+          "string": [
+            {
+              "name": "entrada_usuario",
+              "value": "={{ $('Telegram Trigger').item.json.message.caption || \"\" }}"
+            }
+          ]
+        }
+      },
+      "id": "foto_a_texto",
+      "name": "Foto a Texto",
+      "type": "n8n-nodes-base.set",
+      "typeVersion": 1,
+      "position": [
+        750,
+        350
+      ]
+    },
+    {
+      "parameters": {
+        "values": {
+          "string": [
+            {
+              "name": "entrada_usuario",
+              "value": "={{ $('Telegram Trigger').item.json.message.text }}"
+            }
+          ]
+        }
+      },
+      "id": "texto_puro",
+      "name": "Texto Puro",
+      "type": "n8n-nodes-base.set",
+      "typeVersion": 1,
+      "position": [
+        500,
+        550
+      ]
+    },
+    {
+      "parameters": {
+        "jsCode": "return { entrada_usuario: $input.first().json.entrada_usuario || \"\" };"
+      },
+      "id": "muxer_v60",
+      "name": "Muxer Multimodal",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        1150,
+        300
+      ]
+    },
+    {
+      "parameters": {
+        "jsCode": "return {\n  sessionId: $('Telegram Trigger').item.json.message.chat.id.toString(),\n  chatInput: $node[\"Muxer Multimodal\"].json.entrada_usuario,\n  id_chat: $('Telegram Trigger').item.json.message.chat.id\n};"
+      },
+      "id": "unificador_v60",
+      "name": "Unificador Sesión",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        1350,
+        300
+      ]
+    },
+    {
+      "parameters": {
+        "text": "={{ $json.chatInput }}",
+        "options": {
+          "systemMessage": "Eres el Agente Excel SOTA. SISTEMA DE PENSAMIENTO (ReAct):\n1. ANALIZA: Si el usuario pide datos, DEBES usar 'operar_excel'. No asumas datos ni inventes tablas.\n2. EJECUTA: Envía la herramienta y DETENTE. No narres lo que vas a hacer, simplemente HAZLO.\n3. PERSISTENCIA: El sistema recuerda el archivo activo. Si detectas un .xlsx en el mensaje, úsalo.\n4. REGLA DE ORO: Si no usas una herramienta para leer el archivo, NO TIENES DATOS. Si respondes sin usar la herramienta, estás alucinando y eso está PROHIBIDO.\n5. FORMATO: Siempre responde con tablas Markdown después de obtener resultados reales.\n6. CAPACIDADES AVANZADAS: Puedes usar 'actualizar' (buscar con filtro_filas y cambiar con datos), 'agregar_fila' (pasar dict en datos), 'agregar_columna' (pasar dict {NombreCol: ValorPorDefecto} en datos) y 'calculos' (pasar el nombre de columna en filtro_columnas)."
+        }
+      },
+      "id": "ia_v60",
+      "name": "IA Agente v60",
+      "type": "@n8n/n8n-nodes-langchain.agent",
+      "typeVersion": 1.6,
+      "position": [
+        1650,
+        300
+      ]
+    },
+    {
+      "parameters": {
+        "model": "llama3",
+        "baseUrl": "http://localhost:11434",
+        "options": {
+          "temperature": 0.0
+        }
+      },
+      "id": "model_v60",
+      "name": "Ollama Local",
+      "type": "@n8n/n8n-nodes-langchain.lmChatOllama",
+      "typeVersion": 1,
+      "position": [
+        1550,
+        500
+      ]
+    },
+    {
+      "parameters": {
+        "windowSize": 20,
+        "sessionKey": "={{ $node[\"Unificador Sesión\"].json.sessionId }}"
+      },
+      "id": "memory_v60",
+      "name": "Memoria Sesión",
+      "type": "@n8n/n8n-nodes-langchain.memoryBufferWindow",
+      "typeVersion": 1.2,
+      "position": [
+        1750,
+        500
+      ]
+    },
+    {
+      "parameters": {
+        "name": "listar_archivos",
+        "description": "Muestra qué archivos .xlsx existen en el sistema.",
+        "workflowId": "PEGAR_ID_LISTADO",
+        "specifyInputSchema": true,
+        "inputSchema": "{\"type\":\"object\",\"properties\":{}}"
+      },
+      "id": "tool_list_v60",
+      "name": "listar_archivos",
+      "type": "@n8n/n8n-nodes-langchain.toolWorkflow",
+      "typeVersion": 1.2,
+      "position": [
+        1950,
+        200
+      ]
+    },
+    {
+      "parameters": {
+        "name": "operar_excel",
+        "description": "DEBES utilizar esta herramienta para LEER, ESCRIBIR o CALCULAR datos en el Excel. No respondas sin usarla.",
+        "workflowId": "PEGAR_ID_EXCEL_V60",
+        "specifyInputSchema": true,
+        "inputSchema": "{\"type\":\"object\",\"properties\":{\"archivo_detectado\":{\"type\":\"string\",\"description\":\"Opcional si ya hay uno seleccionado.\"},\"operacion\":{\"type\":\"string\",\"enum\":[\"lectura\",\"actualizar\",\"agregar_fila\",\"agregar_columna\",\"calculos\"]},\"filtro_filas\":{\"type\":\"string\",\"description\":\"Texto para buscar la fila a actualizar o leer.\"},\"filtro_columnas\":{\"type\":\"string\",\"description\":\"Nombre de la columna exacta para hacer calculos.\"},\"datos\":{\"type\":\"object\",\"description\":\"JSON con {columna: valor} para agregar fila, actualizar fila, o el valor por defecto para nueva columna (ej: {'NuevaCol': 'Valor'}).\"}},\"required\":[\"operacion\"]}"
+      },
+      "id": "tool_excel_v60",
+      "name": "operar_excel",
+      "type": "@n8n/n8n-nodes-langchain.toolWorkflow",
+      "typeVersion": 1.2,
+      "position": [
+        1950,
+        400
+      ]
+    },
+    {
+      "parameters": {
+        "jsCode": "/**\n * SANITIZADOR HTML v60.8 - STABLE\n */\nlet raw = $input.first().json.output || \"\";\nlet text = raw.toString()\n  .replace(/This message was sent automatically with n8n\\.?/gi, '')\n  .trim();\n\n// 1. Escapar caracteres HTML básicos para evitar errores de parseo\ntext = text.replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;');\n\n// 2. Convertir negritas de Markdown (**text**) a HTML (<b>text</b>)\ntext = text.replace(/\\*\\*(.*?)\\*\\*/g, '<b>$1</b>');\n\n// 3. Detectar tabla de Markdown y envolverla en <pre> para monoespaciado en Telegram\nif (text.includes('| ---')) {\n    const lines = text.split('\\n');\n    let inTable = false;\n    let newText = [];\n    \n    for (const line of lines) {\n        if (line.trim().startsWith('|')) {\n            if (!inTable) {\n                newText.push('<pre>');\n                inTable = true;\n            }\n            newText.push(line);\n        } else {\n            if (inTable) {\n                newText.push('</pre>');\n                inTable = false;\n            }\n            newText.push(line);\n        }\n    }\n    if (inTable) newText.push('</pre>');\n    text = newText.join('\\n');\n}\n\nreturn {\n  id_chat: $('Unificador Sesión').first().json.id_chat,\n  texto_final: text || \"Hubo un error al procesar tu solicitud.\"\n};"
+      },
+      "id": "cleaner_v60",
+      "name": "Sanitizador Salida",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        2200,
+        300
+      ]
+    },
+    {
+      "parameters": {
+        "chatId": "={{ $json.id_chat }}",
+        "text": "={{ $json.texto_final }}",
+        "additionalFields": {
+          "parse_mode": "HTML"
+        }
+      },
+      "id": "tg_output_v60",
+      "name": "Respuesta Telegram",
+      "type": "n8n-nodes-base.telegram",
+      "typeVersion": 1.1,
+      "position": [
+        2450,
+        300
+      ],
+      "credentials": {
+        "telegramApi": {
+          "id": "VnStY9rD8r8uW8vN",
+          "name": "Telegram account"
+        }
+      }
+    }
+  ],
+  "connections": {
+    "Telegram Trigger": {
+      "main": [
+        [
+          {
+            "node": "Espera Antispam",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Espera Antispam": {
+      "main": [
+        [
+          {
+            "node": "Detectar Tipo",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Detectar Tipo": {
+      "main": [
+        [
+          {
+            "node": "¿Es Audio?",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "¿Es Audio?": {
+      "main": [
+        [
+          {
+            "node": "Bajar Audio",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "¿Es Foto?",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Bajar Audio": {
+      "main": [
+        [
+          {
+            "node": "Groq Whisper",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Groq Whisper": {
+      "main": [
+        [
+          {
+            "node": "Voz a Texto",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Voz a Texto": {
+      "main": [
+        [
+          {
+            "node": "Muxer Multimodal",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "¿Es Foto?": {
+      "main": [
+        [
+          {
+            "node": "Bajar Foto",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "Texto Puro",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Bajar Foto": {
+      "main": [
+        [
+          {
+            "node": "Foto a Texto",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Foto a Texto": {
+      "main": [
+        [
+          {
+            "node": "Muxer Multimodal",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Texto Puro": {
+      "main": [
+        [
+          {
+            "node": "Muxer Multimodal",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Muxer Multimodal": {
+      "main": [
+        [
+          {
+            "node": "Unificador Sesión",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Unificador Sesión": {
+      "main": [
+        [
+          {
+            "node": "IA Agente v60",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Ollama Local": {
+      "ai_languageModel": [
+        [
+          {
+            "node": "IA Agente v60",
+            "type": "ai_languageModel",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Memoria Sesión": {
+      "ai_memory": [
+        [
+          {
+            "node": "IA Agente v60",
+            "type": "ai_memory",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "listar_archivos": {
+      "ai_tool": [
+        [
+          {
+            "node": "IA Agente v60",
+            "type": "ai_tool",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "operar_excel": {
+      "ai_tool": [
+        [
+          {
+            "node": "IA Agente v60",
+            "type": "ai_tool",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "IA Agente v60": {
+      "main": [
+        [
+          {
+            "node": "Sanitizador Salida",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Sanitizador Salida": {
+      "main": [
+        [
+          {
+            "node": "Respuesta Telegram",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    }
+  }
+}

@@ -1,0 +1,247 @@
+{
+  "title": "Agente Telegram Pepito",
+  "author": "Claude Code",
+  "theme": "midnight",
+  "outputName": "presentacion_agente_pepito",
+  "slides": [
+    {
+      "layout": "cover",
+      "data": {
+        "title": "AGENTE TELEGRAM\nPEPITO",
+        "subtitle": "Asistente IA para Google Sheets via Telegram",
+        "tagline": "Automatizacion inteligente con n8n + Google Gemini 2.5 Flash",
+        "date": "Abril 2026"
+      }
+    },
+    {
+      "layout": "two_columns",
+      "data": {
+        "title": "Problema y Solucion",
+        "subtitle": "De la necesidad real del cliente a la solucion implementada",
+        "left": {
+          "title": "EL PROBLEMA",
+          "items": [
+            "Consultar datos de Sheets desde el celular es tedioso",
+            "La app de Google Sheets es compleja en movil",
+            "Necesita buscar, filtrar y calcular datos rapido",
+            "Quiere dictar en vez de escribir (audios)",
+            "El bot debe recordar con que archivo trabaja"
+          ]
+        },
+        "right": {
+          "title": "LA SOLUCION",
+          "items": [
+            "Agente IA que entiende lenguaje natural",
+            "Acceso directo a Google Drive y Sheets por chat",
+            "Filtrado, calculos y edicion en una frase",
+            "Transcripcion automatica de audio con Gemini",
+            "Memoria persistente por usuario con Supabase"
+          ]
+        }
+      }
+    },
+    {
+      "layout": "flow",
+      "data": {
+        "title": "Arquitectura General",
+        "subtitle": "Flujo completo de una interaccion usuario-agente",
+        "steps": [
+          { "label": "Usuario\nenvia mensaje\nTelegram", "emoji": "\uD83D\uDCF1" },
+          { "label": "Webhook\nn8n recibe\nel request", "emoji": "\uD83D\uDD17" },
+          { "label": "Preproceso\ntexto, foto\no audio", "emoji": "\u2699\uFE0F" },
+          { "label": "Agente IA\nGemini 2.5\nFlash", "emoji": "\uD83E\uDDE0" },
+          { "label": "Ejecuta\ntools en\nAPIs", "emoji": "\uD83D\uDD27" },
+          { "label": "Responde\nal usuario\npor Telegram", "emoji": "\u2705" }
+        ],
+        "note": "Workflow de 28 nodos en n8n orquestando todo el flujo end-to-end, con 3 caminos segun tipo de input"
+      }
+    },
+    {
+      "layout": "grid",
+      "data": {
+        "title": "Stack Tecnologico",
+        "subtitle": "Tecnologias y servicios que componen la solucion",
+        "columns": 4,
+        "items": [
+          { "name": "n8n", "desc": "Plataforma de automatizacion\nde workflows (28 nodos)", "emoji": "\u2699\uFE0F" },
+          { "name": "Gemini 2.5 Flash", "desc": "LLM de Google para\nrazonamiento del agente", "emoji": "\uD83E\uDDE0" },
+          { "name": "Telegram API", "desc": "Canal de comunicacion\ncon el usuario final", "emoji": "\uD83D\uDCE8" },
+          { "name": "Google Drive", "desc": "Busqueda y gestion de\narchivos del usuario", "emoji": "\uD83D\uDCC1" },
+          { "name": "Google Sheets", "desc": "Lectura, escritura y\nedicion de hojas de calculo", "emoji": "\uD83D\uDCCA" },
+          { "name": "Supabase", "desc": "PostgreSQL para sesiones\ny memoria por usuario", "emoji": "\uD83D\uDDC3" },
+          { "name": "Gemini Files API", "desc": "Upload y transcripcion\nde archivos de audio", "emoji": "\uD83C\uDFA4" },
+          { "name": "ngrok", "desc": "Tunel seguro para\nexponer n8n al exterior", "emoji": "\uD83D\uDD12" }
+        ]
+      }
+    },
+    {
+      "layout": "flow",
+      "data": {
+        "title": "3 Caminos del Workflow",
+        "subtitle": "El agente detecta automaticamente el tipo de input y activa el pipeline correcto",
+        "steps": [
+          { "label": "Webhook\nEntrada", "emoji": "\uD83D\uDD17" },
+          { "label": "Telegram\nTrigger\n(unwrap)", "emoji": "\uD83D\uDCE9" },
+          { "label": "Tiene\nfoto?\n(IF)", "emoji": "\uD83D\uDDBC" },
+          { "label": "Tiene\naudio?\n(IF)", "emoji": "\uD83C\uDFA4" },
+          { "label": "Normalizar\ninput\n(3 paths)", "emoji": "\uD83D\uDD04" },
+          { "label": "Supabase\nsesion\nusuario", "emoji": "\uD83D\uDDC3" },
+          { "label": "Construir\ncontexto\ncompleto", "emoji": "\uD83D\uDCCB" },
+          { "label": "Agent\nPepito\n(Gemini)", "emoji": "\uD83E\uDDE0" },
+          { "label": "Limpiar\nsalida\nMarkdown", "emoji": "\u2702\uFE0F" },
+          { "label": "Responder\nTelegram\n(HTTP)", "emoji": "\u2705" }
+        ]
+      }
+    },
+    {
+      "layout": "grid",
+      "data": {
+        "title": "8 Herramientas del Agente",
+        "subtitle": "Tools HTTP que Gemini puede invocar autonomamente segun la conversacion",
+        "columns": 2,
+        "items": [
+          { "name": "buscar_en_drive", "desc": "Busca archivos Sheets/Excel en el Google Drive del usuario", "emoji": "\uD83D\uDD0D" },
+          { "name": "seleccionar_archivo", "desc": "Guarda en Supabase que archivo esta usando el usuario", "emoji": "\uD83D\uDCCC" },
+          { "name": "guardar_file_id", "desc": "Actualiza el file_id en la sesion activa", "emoji": "\uD83D\uDCBE" },
+          { "name": "leer_filas", "desc": "Lee rangos de datos de Google Sheets API", "emoji": "\uD83D\uDCD6" },
+          { "name": "listar_hojas", "desc": "Lista todas las pestanas de un spreadsheet", "emoji": "\uD83D\uDCC3" },
+          { "name": "escribir_fila", "desc": "Agrega una nueva fila al final de la hoja", "emoji": "\u270D\uFE0F" },
+          { "name": "editar_celda", "desc": "Modifica el valor de una celda especifica", "emoji": "\u2702\uFE0F" },
+          { "name": "agregar_columna", "desc": "Crea una nueva columna con encabezado", "emoji": "\u2795" }
+        ]
+      }
+    },
+    {
+      "layout": "flow",
+      "data": {
+        "title": "Pipeline de Audio",
+        "subtitle": "Transcripcion de voz con Gemini Files API — el usuario habla, el agente entiende",
+        "steps": [
+          { "label": "Usuario\nenvia audio\npor Telegram", "emoji": "\uD83C\uDFA4" },
+          { "label": "Telegram API\ndevuelve\nfile_path", "emoji": "\uD83D\uDD17" },
+          { "label": "n8n descarga\nel archivo\n.ogg", "emoji": "\u2B07\uFE0F" },
+          { "label": "Upload a\nGemini\nFiles API", "emoji": "\u2601\uFE0F" },
+          { "label": "Gemini\ntranscribe\naudio a texto", "emoji": "\uD83E\uDDE0" },
+          { "label": "Texto entra\nal agente\ncomo input", "emoji": "\u2705" }
+        ],
+        "note": "Se usa Gemini Files API con upload + fileData URI (reemplaza inline_data que fallaba con el storage filesystem-v2 de n8n)"
+      }
+    },
+    {
+      "layout": "split_content",
+      "data": {
+        "title": "Memoria y Contexto por Usuario",
+        "subtitle": "Cada usuario tiene su propio estado persistente entre mensajes",
+        "left": {
+          "items": [
+            "Tabla user_sessions en Supabase",
+            "Campos: chat_id, active_file_id, active_file_name, active_sheet",
+            "Se consulta al inicio de cada mensaje",
+            "Se actualiza cuando el usuario selecciona archivo",
+            "Permite retomar conversacion sin repetir contexto",
+            "Buffer Window Memory de LangChain",
+            "Recuerda ultimos 20 mensajes del chat",
+            "El usuario puede referirse a datos previos"
+          ]
+        },
+        "right": {
+          "title": "Contexto Inyectado al Agente",
+          "items": [
+            "Nombre del usuario (first_name)",
+            "Chat ID para identificar sesion",
+            "Archivo activo seleccionado",
+            "Hoja/pestana activa",
+            "File ID para las APIs de Google",
+            "Tipo de input (texto/foto/audio)"
+          ]
+        }
+      }
+    },
+    {
+      "layout": "table_list",
+      "data": {
+        "title": "9 Bugs Corregidos en Produccion",
+        "subtitle": "Problemas reales encontrados y resueltos durante el desarrollo",
+        "leftHeader": "Bug",
+        "rightHeader": "Solucion aplicada",
+        "rows": [
+          { "left": "leer_filas HTTP 400", "right": "Gemini enviaba nombre de hoja incorrecto" },
+          { "left": "active_file_id siempre 'none'", "right": "Gemini corrompia IDs, ahora siempre usa buscar_en_drive" },
+          { "left": "Footer de n8n en respuestas", "right": "Reemplazado nodo Telegram por HTTP Request directo" },
+          { "left": "Error parse Markdown con _", "right": "Escapar guiones bajos en campos como Salario_USD" },
+          { "left": "Gemini no filtraba datos", "right": "Seccion FILTRAR explicita agregada al system prompt" },
+          { "left": "Suma incorrecta (decimales)", "right": "Instruccion de convertir coma decimal a punto" },
+          { "left": "Agente se colgaba entre mensajes", "right": "Consecuencia del bug file_id, corregido en cascada" },
+          { "left": "Audio sin respuesta", "right": "Migrado de inline_data a Gemini Files API upload" },
+          { "left": "Construir contexto falla con audio", "right": "Nodo ahora lee de 3 fuentes posibles con try/catch" }
+        ]
+      }
+    },
+    {
+      "layout": "chat",
+      "data": {
+        "title": "Demo: Conversacion Real con Pepito",
+        "subtitle": "Ejemplo de interaccion completa mostrando busqueda, seleccion, lectura y calculo",
+        "messages": [
+          { "from": "user", "text": "\uD83D\uDC64  Usuario: \"Busca el archivo Nomina\"" },
+          { "from": "bot", "text": "\uD83E\uDD16  Pepito: \"Encontre Nomina_2026.xlsx en tu Drive. Lo selecciono como archivo activo?\"" },
+          { "from": "user", "text": "\uD83D\uDC64  Usuario: \"Si, seleccionalo\"" },
+          { "from": "bot", "text": "\uD83E\uDD16  Pepito: \"Listo! Ahora estoy trabajando con Nomina_2026. Que necesitas?\"" },
+          { "from": "user", "text": "\uD83D\uDC64  Usuario: \"Cuanto suman los salarios?\"" },
+          { "from": "bot", "text": "\uD83E\uDD16  Pepito: \"La suma total de la columna Salario es $13,121.07 (3 empleados)\"" },
+          { "from": "user", "text": "\uD83D\uDC64  Usuario: \uD83C\uDFA4 [Audio] \"Agrega a Pedro Martinez con salario cinco mil\"" },
+          { "from": "bot", "text": "\uD83E\uDD16  Pepito: \"Fila agregada exitosamente: Pedro Martinez | $5,000.00 en Hoja 1\"" }
+        ]
+      }
+    },
+    {
+      "layout": "stats",
+      "data": {
+        "title": "Metricas del Proyecto",
+        "subtitle": "Numeros que resumen el alcance y complejidad de la solucion",
+        "columns": 3,
+        "stats": [
+          { "value": "28", "label": "Nodos en\nel workflow" },
+          { "value": "8", "label": "Herramientas IA\ndisponibles" },
+          { "value": "5", "label": "APIs\nintegradas" },
+          { "value": "9", "label": "Bugs corregidos\nen produccion" },
+          { "value": "3", "label": "Tipos de input\ntexto / foto / audio" },
+          { "value": "4", "label": "Scripts de\nreparacion automatica" }
+        ]
+      }
+    },
+    {
+      "layout": "closing",
+      "data": {
+        "title": "Estado Actual y Proximos Pasos",
+        "subtitle": "Resumen del estado de produccion del agente",
+        "columns": [
+          {
+            "title": "FUNCIONANDO",
+            "icon": "\u2713",
+            "items": [
+              "Mensajes de texto con respuesta IA",
+              "Analisis de fotos con Gemini Vision",
+              "Busqueda en Google Drive",
+              "Lectura/filtrado de Sheets",
+              "Calculos (suma, promedio, max, min)",
+              "Escritura y edicion de datos",
+              "Memoria por usuario (Supabase)"
+            ]
+          },
+          {
+            "title": "PROXIMOS PASOS",
+            "items": [
+              "Validar pipeline de audio en produccion",
+              "Soporte para documentos PDF",
+              "Dashboard de metricas de uso",
+              "Notificaciones programadas",
+              "Multi-idioma (ES/EN)"
+            ]
+          }
+        ],
+        "banner": "Workflow ID: BD0kGowbl0SwOvC2  |  Estado: ACTIVO  |  Abril 2026"
+      }
+    }
+  ]
+}

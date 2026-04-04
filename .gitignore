@@ -1,14 +1,9 @@
-# n8n temporary files
-~$*.xlsx
-*.tmp
-
-# Excel lock files
-.~lock.*
-
-# OS files
-Thumbs.db
-.DS_Store
-
-# Credentials (if any were stored locally)
-.env
-secret.json
+﻿*.pth
+*.h5
+*.keras
+*.safetensors
+*.tflite
+*.zip
+SBW-vectors-300-min5.txt
+.agents/
+agente.md

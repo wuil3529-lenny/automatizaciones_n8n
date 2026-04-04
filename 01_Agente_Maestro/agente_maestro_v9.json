@@ -1,0 +1,493 @@
+{
+  "name": "agente_maestro_v9.5_HEALED",
+  "nodes": [
+    {
+      "parameters": {
+        "updates": [
+          "message",
+          "edited_message",
+          "callback_query"
+        ]
+      },
+      "id": "1c18e10d-0be6-41e5-bed4-528c83e1e9bb",
+      "name": "Telegram Trigger",
+      "type": "n8n-nodes-base.telegramTrigger",
+      "typeVersion": 1.1,
+      "position": [
+        -800,
+        300
+      ],
+      "credentials": {
+        "telegramApi": {
+          "id": "U7ukrjvC3nlt4VWu"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "jsCode": "/**\n * NORMALIZADOR v9.5 - ANTI-BAD REQUEST\n */\nconst msg = $json.message || $json.edited_message || $json.callback_query?.message || {};\nconst text = msg.text || $json.callback_query?.data || \"\";\nconst caption = msg.caption || \"\";\nconst voice = msg.voice || msg.audio || null;\nconst photo = msg.photo || null;\nconst chat_id = msg.chat?.id || $json.callback_query?.from?.id || null;\n\nreturn {\n  chat_id,\n  text,\n  caption,\n  voice,\n  photo,\n  type: voice ? 'voice' : (photo ? 'photo' : 'text'),\n  chatInput: voice ? \"[Audio Transcrito]\" : (photo ? (caption || \"Analiza esta imagen\") : text)\n};"
+      },
+      "id": "b21497ff-f612-4fa3-9e7f-a6724a0cfcee",
+      "name": "Normalizador Entrada",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        -550,
+        300
+      ]
+    },
+    {
+      "parameters": {
+        "rules": {
+          "values": [
+            {
+              "conditions": {
+                "options": {
+                  "caseSensitive": true,
+                  "leftValue": "",
+                  "typeValidation": "strict",
+                  "version": 2
+                },
+                "conditions": [
+                  {
+                    "leftValue": "={{ $json.type }}",
+                    "rightValue": "voice",
+                    "operator": {
+                      "type": "string",
+                      "operation": "equals"
+                    }
+                  }
+                ],
+                "combinator": "and"
+              },
+              "renameOutput": true,
+              "outputKey": "voz"
+            },
+            {
+              "conditions": {
+                "options": {
+                  "caseSensitive": true,
+                  "leftValue": "",
+                  "typeValidation": "strict",
+                  "version": 2
+                },
+                "conditions": [
+                  {
+                    "leftValue": "={{ $json.type }}",
+                    "rightValue": "photo",
+                    "operator": {
+                      "type": "string",
+                      "operation": "equals"
+                    }
+                  }
+                ],
+                "combinator": "and"
+              },
+              "renameOutput": true,
+              "outputKey": "foto"
+            },
+            {
+              "conditions": {
+                "options": {
+                  "caseSensitive": true,
+                  "leftValue": "",
+                  "typeValidation": "strict",
+                  "version": 2
+                },
+                "conditions": [
+                  {
+                    "leftValue": "={{ $json.type }}",
+                    "rightValue": "text",
+                    "operator": {
+                      "type": "string",
+                      "operation": "equals"
+                    }
+                  }
+                ],
+                "combinator": "and"
+              },
+              "renameOutput": true,
+              "outputKey": "texto"
+            }
+          ]
+        },
+        "options": {}
+      },
+      "id": "99d45526-edb8-4cd9-96c5-9ecfd137ca11",
+      "name": "Muxer Entrada",
+      "type": "n8n-nodes-base.switch",
+      "typeVersion": 3,
+      "position": [
+        -300,
+        300
+      ]
+    },
+    {
+      "parameters": {
+        "resource": "file",
+        "fileId": "={{ $json.voice.file_id }}"
+      },
+      "id": "a9ebe7eb-cd5f-4ad0-816c-abe8752a0402",
+      "name": "Download Voice",
+      "type": "n8n-nodes-base.telegram",
+      "typeVersion": 1.2,
+      "position": [
+        0,
+        150
+      ],
+      "credentials": {
+        "telegramApi": {
+          "id": "U7ukrjvC3nlt4VWu"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "language": "javaScript",
+        "jsCode": "// STT via Gemini API - reemplaza nodo googleGemini no disponible\nconst binaryData = $binary?.data;\nif (!binaryData) {\n  return [{ json: { text: \"\", error: \"No binary data found\" } }];\n}\n\n// Obtener el API key de la credencial o variable de entorno\nconst apiKey = $env?.GOOGLE_API_KEY || $env?.GEMINI_API_KEY;\nif (!apiKey) {\n  throw new Error(\"Falta GOOGLE_API_KEY en las variables de entorno de n8n\");\n}\n\n// Los datos binarios vienen en base64\nconst base64Audio = binaryData.data;\nconst mimeType = binaryData.mimeType || \"audio/ogg\";\n\n// Llamar a la API de Gemini\nconst response = await $http.request({\n  method: \"POST\",\n  url: `https://generativelanguage.googleapis.com/v1beta/models/gemini-1.5-flash:generateContent?key=${apiKey}`,\n  headers: { \"Content-Type\": \"application/json\" },\n  body: JSON.stringify({\n    contents: [{\n      parts: [\n        {\n          inline_data: {\n            mime_type: mimeType,\n            data: base64Audio\n          }\n        },\n        {\n          text: \"Transcribe el audio exactamente como se dice. Solo devuelve el texto transcrito, sin explicaciones.\"\n        }\n      ]\n    }],\n    generationConfig: {\n      temperature: 0,\n      maxOutputTokens: 2048\n    }\n  })\n});\n\nconst transcript = response?.candidates?.[0]?.content?.parts?.[0]?.text || \"\";\nreturn [{ json: { text: transcript } }];"
+      },
+      "id": "876c1aea-e985-4787-87e0-2e8471455cae",
+      "name": "STT Gemini",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        200,
+        150
+      ]
+    },
+    {
+      "parameters": {
+        "resource": "file",
+        "fileId": "={{ $json.photo.reverse()[0].file_id }}"
+      },
+      "id": "105db3cf-1917-4f07-bf6c-e12c92847a6a",
+      "name": "Download Photo",
+      "type": "n8n-nodes-base.telegram",
+      "typeVersion": 1.2,
+      "position": [
+        0,
+        300
+      ],
+      "credentials": {
+        "telegramApi": {
+          "id": "U7ukrjvC3nlt4VWu"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "assignments": {
+          "assignments": [
+            {
+              "id": "in-v",
+              "name": "chatInput",
+              "value": "={{ $json.text || $json.output || '' }}",
+              "type": "string"
+            }
+          ]
+        }
+      },
+      "id": "a0fcb0bc-a52a-4569-b00e-57925273d27e",
+      "name": "Finalizar Voz",
+      "type": "n8n-nodes-base.set",
+      "typeVersion": 3.4,
+      "position": [
+        400,
+        150
+      ]
+    },
+    {
+      "parameters": {
+        "assignments": {
+          "assignments": [
+            {
+              "id": "in-f",
+              "name": "chatInput",
+              "value": "={{ $('Normalizador Entrada').first().json.chatInput }}",
+              "type": "string"
+            }
+          ]
+        }
+      },
+      "id": "f19f8f19-4050-4f78-ad62-21f65a72d869",
+      "name": "Finalizar Photo",
+      "type": "n8n-nodes-base.set",
+      "typeVersion": 3.4,
+      "position": [
+        400,
+        300
+      ]
+    },
+    {
+      "parameters": {
+        "assignments": {
+          "assignments": [
+            {
+              "id": "in-t",
+              "name": "chatInput",
+              "value": "={{ $('Normalizador Entrada').first().json.chatInput }}",
+              "type": "string"
+            }
+          ]
+        }
+      },
+      "id": "84a9cd97-8959-44c8-b534-11b7234c48f4",
+      "name": "Finalizar Texto",
+      "type": "n8n-nodes-base.set",
+      "typeVersion": 3.4,
+      "position": [
+        400,
+        450
+      ]
+    },
+    {
+      "parameters": {
+        "promptType": "define",
+        "text": "={{ $json.chatInput }}",
+        "options": {
+          "systemMessage": "Eres el Agente Maestro Multimodal v9.5 SOTA.\n\nSISTEMA DE PENSAMIENTO (ReAct):\n1. ANALIZA: Si el usuario pide datos de Google Sheets o Drive, DEBES usar 'gestor_workspace'. No asumas datos.\n2. MULTIMODALIDAD: Si recibes una imagen, descríbela o extrae datos de ella si se solicita.\n3. PERSISTENCIA: El sistema recuerda el archivo activo. Si mencionan un ID o nombre de archivo, úsalo.\n4. REGLA DE ORO: Si no usas la herramienta para leer el archivo, NO TIENES DATOS. Prohibido alucinar.\n5. MENÚ NUMÉRICO: Si buscas un archivo y no lo encuentras, o si el usuario pide ver archivos, usa 'gestor_workspace' (operacion 'buscar', query vacío). Muestra los resultados en una lista numerada (Ej: '1. NombreDocumento'). Cuando el usuario responda con un número, busca en el historial de nuestra conversación el archivo correspondiente, extrae su ID exacto y úsalo para la siguiente operación.\n6. LECTURA RESTRINGIDA: La operación de 'lectura' solo soporta Hojas de Cálculo (Sheets/Excel). Si el usuario selecciona un archivo con extensión pdf, docx, imagen o generico para leer, dile amablemente: 'Actualmente mi sistema solo me permite leer internamente contenido de Hojas de Cálculo. Próximamente podré leer otros formatos'. Si es una hoja de cálculo, procede a leerlo.\n"
+        }
+      },
+      "id": "8c0e3943-558b-40f5-b4c4-524b53a9b96a",
+      "name": "Agente Maestro AI",
+      "type": "@n8n/n8n-nodes-langchain.agent",
+      "typeVersion": 1.7,
+      "position": [
+        650,
+        300
+      ]
+    },
+    {
+      "parameters": {
+        "modelName": "gemini-1.5-pro",
+        "options": {}
+      },
+      "id": "fff80e51-0aca-4dea-839d-c6eaf39fcc78",
+      "name": "Gemini Pro Multimodal",
+      "type": "@n8n/n8n-nodes-langchain.lmChatGoogleGemini",
+      "typeVersion": 1,
+      "position": [
+        550,
+        500
+      ],
+      "credentials": {
+        "googlePalmApi": {
+          "id": "nhdGIi2iSmQ98WZb"
+        }
+      }
+    },
+    {
+      "parameters": {},
+      "id": "c5d42f6a-40c6-42d2-b9de-8c883a4d1d18",
+      "name": "ChatMemory",
+      "type": "@n8n/n8n-nodes-langchain.memoryBufferWindow",
+      "typeVersion": 1,
+      "position": [
+        750,
+        500
+      ]
+    },
+    {
+      "parameters": {
+        "name": "gestor_workspace",
+        "description": "Herramienta OBLIGATORIA para interactuar con archivos de Google Drive y Sheets. Debes usarla SIEMPRE que el usuario pida operar sobre hojas de cálculo, datos_prueba_radon, leer, buscar archivos o actualizarlos.",
+        "workflowId": "LKFg0aPem7xPwttW",
+        "specifyInputSchema": true,
+        "schemaType": "manual",
+        "inputSchema": "{\"type\":\"object\",\"properties\":{\"operacion\":{\"type\":\"string\",\"enum\":[\"buscar\",\"lectura\",\"seleccionar\",\"calculos\",\"actualizar\",\"agregar_fila\",\"agregar_columna\"]},\"query\":{\"type\":\"string\"},\"file_id\":{\"type\":\"string\"},\"sheet_name\":{\"type\":\"string\"},\"filtro\":{\"type\":\"string\"},\"columna\":{\"type\":\"string\"},\"datos\":{\"type\":\"object\"}},\"required\":[\"operacion\"]}"
+      },
+      "id": "0a0c9bab-857b-471e-9a4c-53089de74c7b",
+      "name": "gestor_workspace",
+      "type": "@n8n/n8n-nodes-langchain.toolWorkflow",
+      "typeVersion": 1,
+      "position": [
+        900,
+        250
+      ]
+    },
+    {
+      "parameters": {
+        "chatId": "={{ $('Normalizador Entrada').first().json.chat_id }}",
+        "text": "={{ $json.output }}",
+        "additionalFields": {
+          "parse_mode": "HTML"
+        }
+      },
+      "id": "3017add6-6a87-47ee-b7f6-8df0be685a29",
+      "name": "Respuesta Telegram",
+      "type": "n8n-nodes-base.telegram",
+      "typeVersion": 1.2,
+      "position": [
+        1150,
+        300
+      ],
+      "credentials": {
+        "telegramApi": {
+          "id": "U7ukrjvC3nlt4VWu"
+        }
+      }
+    }
+  ],
+  "connections": {
+    "Telegram Trigger": {
+      "main": [
+        [
+          {
+            "node": "Normalizador Entrada",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Normalizador Entrada": {
+      "main": [
+        [
+          {
+            "node": "Muxer Entrada",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Muxer Entrada": {
+      "main": [
+        [
+          {
+            "node": "Download Voice",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "Download Photo",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "Finalizar Texto",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Download Voice": {
+      "main": [
+        [
+          {
+            "node": "STT Gemini",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "STT Gemini": {
+      "main": [
+        [
+          {
+            "node": "Finalizar Voz",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Download Photo": {
+      "main": [
+        [
+          {
+            "node": "Finalizar Photo",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Finalizar Voz": {
+      "main": [
+        [
+          {
+            "node": "Agente Maestro AI",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Finalizar Photo": {
+      "main": [
+        [
+          {
+            "node": "Agente Maestro AI",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Finalizar Texto": {
+      "main": [
+        [
+          {
+            "node": "Agente Maestro AI",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Gemini Pro Multimodal": {
+      "ai_languageModel": [
+        [
+          {
+            "node": "Agente Maestro AI",
+            "type": "ai_languageModel",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "ChatMemory": {
+      "ai_memory": [
+        [
+          {
+            "node": "Agente Maestro AI",
+            "type": "ai_memory",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "gestor_workspace": {
+      "ai_tool": [
+        [
+          {
+            "node": "Agente Maestro AI",
+            "type": "ai_tool",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Agente Maestro AI": {
+      "main": [
+        [
+          {
+            "node": "Respuesta Telegram",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    }
+  },
+  "settings": {
+    "executionOrder": "v1"
+  }
+}

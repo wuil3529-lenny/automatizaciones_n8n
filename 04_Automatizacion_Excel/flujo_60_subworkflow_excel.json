@@ -1,0 +1,452 @@
+{
+  "name": "flujo_60_subworkflow_excel",
+  "nodes": [
+    {
+      "parameters": {},
+      "id": "trigger_v60",
+      "name": "Ejecutar el desencadenante del flujo de trabajo",
+      "type": "n8n-nodes-base.executeWorkflowTrigger",
+      "typeVersion": 1,
+      "position": [
+        -500,
+        300
+      ]
+    },
+    {
+      "parameters": {
+        "filePath": "C:/Users/admin/.n8n-files/lista.csv"
+      },
+      "id": "read_list_v60",
+      "name": "Leer Lista Excel",
+      "type": "n8n-nodes-base.readBinaryFile",
+      "typeVersion": 1,
+      "position": [
+        -300,
+        300
+      ]
+    },
+    {
+      "parameters": {
+        "options": {
+          "headerRow": true
+        }
+      },
+      "id": "parse_list_v60",
+      "name": "Una lista JSON",
+      "type": "n8n-nodes-base.spreadsheetFile",
+      "typeVersion": 1,
+      "position": [
+        -100,
+        300
+      ]
+    },
+    {
+      "parameters": {
+        "filePath": "C:/Users/admin/.n8n-files/contexto_actual.txt"
+      },
+      "id": "read_context_v60",
+      "name": "Leer Estado",
+      "type": "n8n-nodes-base.readBinaryFile",
+      "typeVersion": 1,
+      "position": [
+        100,
+        300
+      ],
+      "onError": "continueRegularOutput"
+    },
+    {
+      "parameters": {
+        "jsCode": "/**\n * HUB DE PERSISTENCIA v60.7.5\n */\nconst input = $input.first().json;\n\nfunction buscarRecurse(obj) {\n    if (typeof obj === 'string') {\n        const s = obj.trim();\n        return (s.toLowerCase().endsWith('.xlsx')) ? s : null;\n    }\n    if (obj && typeof obj === 'object') {\n        for (const key in obj) {\n            const result = buscarRecurse(obj[key]);\n            if (result) return result;\n        }\n    }\n    return null;\n}\n\nconst lista_items = $('Una lista JSON').all().map(i => \n    i.json.nombre_archivo?.toLowerCase() || \n    Object.values(i.json)[0]?.toLowerCase()\n).filter(v => typeof v === 'string' && v.endsWith('.xlsx'));\n\nlet estado_previo = \"\";\ntry {\n    const bin_data = $('Leer Estado').first().binary?.data;\n    if (bin_data) {\n        estado_previo = Buffer.from(bin_data.data, 'base64').toString().trim();\n    }\n} catch(e) {}\n\nlet nombre_detectado = buscarRecurse(input);\nlet final_filename = \"\";\nlet estado_msj = \"\";\nlet error = false;\n\nif (nombre_detectado) {\n    const encontrado = lista_items.find(l => l.toLowerCase() === nombre_detectado.toLowerCase());\n    if (encontrado) {\n        final_filename = encontrado;\n        estado_msj = `Archivo ${encontrado} detectado.`;\n    } else {\n        error = true;\n        estado_msj = `El archivo '${nombre_detectado}' no existe. Disponibles: ${lista_items.join(', ')}`;\n    }\n} else if (estado_previo && lista_items.includes(estado_previo.toLowerCase())) {\n    final_filename = estado_previo;\n    estado_msj = `Usando activo: ${estado_previo}.`;\n} else {\n    error = true;\n    estado_msj = \"No hay archivo activo. Selecciona uno.\";\n}\n\nreturn {\n  nombre_archivo: final_filename ? `C:/Users/admin/.n8n-files/${final_filename}` : \"undefined\",\n  solo_nombre: final_filename,\n  operacion: (input.operacion || \"lectura\").toLowerCase(),\n  filtro_filas: input.filtro_filas || \"\",\n  filtro_cols: input.filtro_columnas || \"\",\n  datos: input.datos || null,\n  ruta_valida: !error,\n  mensaje: estado_msj\n};"
+      },
+      "id": "logic_unifier_v60",
+      "name": "Unificador Contexto",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 1,
+      "position": [
+        300,
+        300
+      ]
+    },
+    {
+      "parameters": {
+        "conditions": {
+          "boolean": [
+            {
+              "value1": "={{ $json.ruta_valida }}",
+              "value2": true
+            }
+          ]
+        }
+      },
+      "id": "check_v60",
+      "name": "Validar Ruta",
+      "type": "n8n-nodes-base.if",
+      "typeVersion": 1,
+      "position": [
+        500,
+        300
+      ]
+    },
+    {
+      "parameters": {
+        "filePath": "={{ $json.nombre_archivo }}"
+      },
+      "id": "read_xlsx_v60",
+      "name": "Leer Excel",
+      "type": "n8n-nodes-base.readBinaryFile",
+      "typeVersion": 1,
+      "position": [
+        700,
+        200
+      ],
+      "onError": "continueErrorOutput"
+    },
+    {
+      "parameters": {
+        "options": {}
+      },
+      "id": "to_json_v60",
+      "name": "Un JSON",
+      "type": "n8n-nodes-base.spreadsheetFile",
+      "typeVersion": 1,
+      "position": [
+        900,
+        200
+      ]
+    },
+    {
+      "parameters": {
+        "jsCode": "const items = $input.all();\nconst config = $('Unificador Contexto').first().json;\n\nif (items.length === 0 || (items[0].json && (items[0].json.error || items[0].json.message))) {\n    return [{ json: { estado: \"ERROR\", mensaje: \"Error al procesar el archivo.\" } }];\n}\n\nlet datos = items.map(i => i.json);\nlet msj_extra = \"\";\n\nlet regex = null;\nif (config.filtro_filas) {\n    regex = new RegExp(config.filtro_filas, 'i');\n}\n\nswitch(config.operacion) {\n    case 'lectura':\n        break;\n    case 'actualizar':\n        let actualizados = 0;\n        if (config.datos && regex) {\n            datos = datos.map(row => {\n                if (Object.values(row).some(v => v != null && regex.test(String(v)))) {\n                    actualizados++;\n                    return { ...row, ...config.datos };\n                }\n                return row;\n            });\n            msj_extra = `Se actualizaron ${actualizados} filas coincidiendo con el filtro.`;\n        } else if (config.datos && !regex) {\n            msj_extra = \"ADVERTENCIA: Se requiere filtro_filas para actualizar datos específicos.\";\n        }\n        break;\n    case 'agregar_fila':\n        if (config.datos) {\n            datos.push(config.datos);\n            msj_extra = \"Fila agregada exitosamente.\";\n        }\n        break;\n    case 'agregar_columna':\n        if (config.datos) {\n            const keys = Object.keys(config.datos);\n            if (keys.length > 0) {\n                const colName = keys[0];\n                const colValue = config.datos[colName];\n                datos = datos.map(row => {\n                    row[colName] = colValue;\n                    return row;\n                });\n                msj_extra = `Columna '${colName}' agregada con valor '${colValue}'.`;\n            }\n        }\n        break;\n    case 'calculos':\n        if (config.filtro_cols) {\n            const col = config.filtro_cols;\n            let suma = 0;\n            let count = 0;\n            datos.forEach(row => {\n                if (row[col] !== undefined && row[col] !== null) {\n                    const strVal = String(row[col]).replace(',', '.');\n                    const val = parseFloat(strVal);\n                    if (!isNaN(val)) {\n                        suma += val;\n                        count++;\n                    }\n                }\n            });\n            msj_extra = `Cálculo sobre '${col}': Suma = ${suma}, Promedio = ${count > 0 ? (suma/count).toFixed(2) : 0}, Registros numéricos analizados = ${count}`;\n        } else {\n            msj_extra = \"Especifique 'filtro_columnas' (el nombre exacto de la columna) para realizar el cálculo.\";\n        }\n        break;\n}\n\nlet resultados_vista = datos;\nif (regex && (config.operacion === 'actualizar' || config.operacion === 'lectura')) {\n    resultados_vista = datos.filter(d => Object.values(d).some(v => v != null && regex.test(String(v))));\n}\n\nreturn [{\n  json: {\n    estado: \"EXITO\",\n    mensaje: msj_extra || config.mensaje,\n    conteo: resultados_vista.length,\n    resultados: resultados_vista.slice(0, 15),\n    __datos_completos: datos\n  }\n}];"
+      },
+      "id": "logic_v60",
+      "name": "Motor Datos",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 1,
+      "position": [
+        1100,
+        200
+      ]
+    },
+    {
+      "parameters": {
+        "conditions": {
+          "boolean": [
+            {
+              "value1": "={{ ['lectura', 'calculos'].includes($('Unificador Contexto').first().json.operacion) }}",
+              "value2": true
+            }
+          ]
+        }
+      },
+      "id": "si_guardar",
+      "name": "¿Solo Lectura?",
+      "type": "n8n-nodes-base.if",
+      "typeVersion": 1,
+      "position": [
+        1300,
+        300
+      ]
+    },
+    {
+      "parameters": {
+        "operation": "create",
+        "fileFormat": "xlsx",
+        "binaryPropertyName": "data",
+        "options": {}
+      },
+      "id": "to_excel_v60",
+      "name": "A Excel",
+      "type": "n8n-nodes-base.spreadsheetFile",
+      "typeVersion": 1,
+      "position": [
+        1500,
+        400
+      ]
+    },
+    {
+      "parameters": {
+        "fileName": "={{ $('Unificador Contexto').first().json.nombre_archivo }}"
+      },
+      "id": "write_disco_v60",
+      "name": "Guardar Excel",
+      "type": "n8n-nodes-base.writeBinaryFile",
+      "typeVersion": 1,
+      "position": [
+        1700,
+        400
+      ]
+    },
+    {
+      "parameters": {
+        "mode": "jsonToBinary",
+        "convertAllJSON": false,
+        "sourceKey": "solo_nombre",
+        "destinationKey": "data"
+      },
+      "id": "json_to_bin_v60",
+      "name": "JSON a Binario",
+      "type": "n8n-nodes-base.moveBinaryData",
+      "typeVersion": 1,
+      "position": [
+        1900,
+        300
+      ]
+    },
+    {
+      "parameters": {
+        "binaryPropertyName": "data",
+        "fileName": "C:/Users/admin/.n8n-files/contexto_actual.txt"
+      },
+      "id": "write_context_v60",
+      "name": "Guardar Estado",
+      "type": "n8n-nodes-base.writeBinaryFile",
+      "typeVersion": 1,
+      "position": [
+        2100,
+        300
+      ]
+    },
+    {
+      "parameters": {
+        "jsCode": "return $('Motor Datos').first().json;"
+      },
+      "id": "return_data",
+      "name": "Retornar Datos",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        2350,
+        300
+      ]
+    },
+    {
+      "parameters": {
+        "values": {
+          "string": [
+            {
+              "name": "estado",
+              "value": "ERROR_VALIDACION"
+            },
+            {
+              "name": "mensaje",
+              "value": "={{ $json.mensaje }}"
+            }
+          ]
+        }
+      },
+      "id": "err_v60",
+      "name": "Información de error",
+      "type": "n8n-nodes-base.set",
+      "typeVersion": 1,
+      "position": [
+        700,
+        450
+      ]
+    },
+    {
+      "parameters": {
+        "jsCode": "const datos = $('Motor Datos').first().json.__datos_completos || [];\nreturn datos.map(d => ({ json: d }));"
+      },
+      "id": "expandir_datos_v60",
+      "name": "Expandir Datos",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        1400,
+        400
+      ]
+    }
+  ],
+  "connections": {
+    "Ejecutar el desencadenante del flujo de trabajo": {
+      "main": [
+        [
+          {
+            "node": "Leer Lista Excel",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Leer Lista Excel": {
+      "main": [
+        [
+          {
+            "node": "Una lista JSON",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Una lista JSON": {
+      "main": [
+        [
+          {
+            "node": "Leer Estado",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Leer Estado": {
+      "main": [
+        [
+          {
+            "node": "Unificador Contexto",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Unificador Contexto": {
+      "main": [
+        [
+          {
+            "node": "Validar Ruta",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Validar Ruta": {
+      "main": [
+        [
+          {
+            "node": "Leer Excel",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "Información de error",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Leer Excel": {
+      "main": [
+        [
+          {
+            "node": "Un JSON",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Un JSON": {
+      "main": [
+        [
+          {
+            "node": "Motor Datos",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Motor Datos": {
+      "main": [
+        [
+          {
+            "node": "¿Solo Lectura?",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "¿Solo Lectura?": {
+      "main": [
+        [
+          {
+            "node": "JSON a Binario",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "Expandir Datos",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "A Excel": {
+      "main": [
+        [
+          {
+            "node": "Guardar Excel",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Guardar Excel": {
+      "main": [
+        [
+          {
+            "node": "JSON a Binario",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "JSON a Binario": {
+      "main": [
+        [
+          {
+            "node": "Guardar Estado",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Guardar Estado": {
+      "main": [
+        [
+          {
+            "node": "Retornar Datos",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Información de error": {
+      "main": [
+        [
+          {
+            "node": "Retornar Datos",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Expandir Datos": {
+      "main": [
+        [
+          {
+            "node": "A Excel",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    }
+  }
+}

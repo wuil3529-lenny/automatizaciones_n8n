@@ -1,0 +1,466 @@
+{
+  "name": "sub_gestor_workspace_v9.2",
+  "nodes": [
+    {
+      "parameters": {},
+      "id": "9bdd8b9d-dd92-4dd1-96eb-56a5e69463eb",
+      "name": "Execute Workflow Trigger",
+      "type": "n8n-nodes-base.executeWorkflowTrigger",
+      "typeVersion": 1,
+      "position": [
+        -800,
+        300
+      ]
+    },
+    {
+      "parameters": {
+        "jsCode": "const input = $input.first().json;\nreturn {\n  operacion: (input.operacion || 'buscar').toLowerCase(),\n  query: input.query || '',\n  file_id: input.file_id || null,\n  sheet_name: input.sheet_name || 'Hoja 1',\n  filtro: input.filtro || input.filtro_filas || '',\n  datos: (typeof input.datos === 'string' ? JSON.parse(input.datos) : input.datos) || null,\n  columna: input.columna || input.filtro_columnas || ''\n};"
+      },
+      "id": "b5d0059c-ce41-456c-863d-7014d00c66f6",
+      "name": "Parser V9.2",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        -600,
+        300
+      ]
+    },
+    {
+      "parameters": {
+        "rules": {
+          "values": [
+            {
+              "conditions": {
+                "options": {
+                  "caseSensitive": true,
+                  "leftValue": "",
+                  "typeValidation": "strict",
+                  "version": 2
+                },
+                "conditions": [
+                  {
+                    "leftValue": "={{ $json.operacion }}",
+                    "rightValue": "buscar",
+                    "operator": {
+                      "type": "string",
+                      "operation": "equals"
+                    }
+                  }
+                ],
+                "combinator": "and"
+              },
+              "renameOutput": true,
+              "outputKey": "buscar"
+            },
+            {
+              "conditions": {
+                "options": {
+                  "caseSensitive": true,
+                  "leftValue": "",
+                  "typeValidation": "strict",
+                  "version": 2
+                },
+                "conditions": [
+                  {
+                    "leftValue": "={{ $json.operacion }}",
+                    "rightValue": "lectura",
+                    "operator": {
+                      "type": "string",
+                      "operation": "equals"
+                    }
+                  }
+                ],
+                "combinator": "and"
+              },
+              "renameOutput": true,
+              "outputKey": "leer"
+            },
+            {
+              "conditions": {
+                "options": {
+                  "caseSensitive": true,
+                  "leftValue": "",
+                  "typeValidation": "strict",
+                  "version": 2
+                },
+                "conditions": [
+                  {
+                    "leftValue": "={{ $json.operacion }}",
+                    "rightValue": "seleccionar",
+                    "operator": {
+                      "type": "string",
+                      "operation": "equals"
+                    }
+                  }
+                ],
+                "combinator": "and"
+              },
+              "renameOutput": true,
+              "outputKey": "seleccionar"
+            },
+            {
+              "conditions": {
+                "options": {
+                  "caseSensitive": true,
+                  "leftValue": "",
+                  "typeValidation": "strict",
+                  "version": 2
+                },
+                "conditions": [
+                  {
+                    "leftValue": "={{ ['calculos', 'actualizar', 'agregar_fila', 'agregar_columna'].includes($json.operacion) }}",
+                    "rightValue": "",
+                    "operator": {
+                      "type": "boolean",
+                      "operation": "true"
+                    }
+                  }
+                ],
+                "combinator": "and"
+              },
+              "renameOutput": true,
+              "outputKey": "shell"
+            }
+          ]
+        },
+        "options": {}
+      },
+      "id": "3b8de5c5-0039-4bc4-8b75-b29a0a6312d9",
+      "name": "Router V9",
+      "type": "n8n-nodes-base.switch",
+      "typeVersion": 3,
+      "position": [
+        -350,
+        300
+      ]
+    },
+    {
+      "parameters": {
+        "resource": "fileFolder",
+        "operation": "search",
+        "searchMethod": "query",
+        "queryString": "={{ $json.query ? \"name contains '\" + $json.query + \"' and trashed = false\" : \"mimeType != 'application/vnd.google-apps.folder' and trashed = false\" }}",
+        "returnAll": true,
+        "options": {}
+      },
+      "alwaysOutputData": true,
+      "id": "166ab722-2124-464b-9199-f0d2c503d096",
+      "name": "Google Drive",
+      "type": "n8n-nodes-base.googleDrive",
+      "typeVersion": 3,
+      "position": [
+        -100,
+        100
+      ],
+      "credentials": {
+        "googleDriveOAuth2Api": {
+          "id": "DcHiD0korYVWsEPQ"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "resource": "sheet",
+        "operation": "getAll",
+        "documentId": {
+          "__rl": true,
+          "value": "={{ $json.file_id }}",
+          "mode": "id"
+        },
+        "sheetName": {
+          "__rl": true,
+          "value": "={{ $json.sheet_name || 'Hoja 1' }}",
+          "mode": "name"
+        }
+      },
+      "id": "9be7f467-ec10-46c2-9f7a-a93de9c18a0a",
+      "name": "Google Sheets",
+      "type": "n8n-nodes-base.googleSheets",
+      "typeVersion": 4.5,
+      "position": [
+        -100,
+        300
+      ],
+      "alwaysOutputData": false,
+      "credentials": {
+        "googleSheetsOAuth2Api": {
+          "id": "DcHiD0korYVWsEPQ"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "jsCode": "return { estado: 'SELECCIONADO', file_id: $input.first().json.file_id, mensaje: 'Archivo activo actualizado.' };"
+      },
+      "id": "f3a62cea-fb5c-435f-9962-5cda5df7271c",
+      "name": "Set Context",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        -100,
+        500
+      ]
+    },
+    {
+      "parameters": {
+        "jsCode": "/**\n * SHELL LOGIC v9.2 - MEMORY SAFE\n */\nconst items = $input.all().map(i => i.json);\nconst config = $('Parser V9.2').first().json;\nlet datos = [...items];\nlet msj = '';\nlet needUpdate = false;\n\nlet regex = null;\nif (config.filtro) {\n    regex = new RegExp(config.filtro, 'i');\n}\n\nswitch(config.operacion) {\n    case 'calculos':\n        if (config.columna) {\n            let suma = 0, count = 0;\n            items.forEach(r => {\n                const v = parseFloat(String(r[config.columna] || 0).replace(',', '.'));\n                if (!isNaN(v)) { suma += v; count++; }\n            });\n            msj = `Cálculo sobre '${config.columna}': Suma = ${suma}, Promedio = ${count > 0 ? (suma/count).toFixed(2) : 0}`;\n        }\n        break;\n\n    case 'actualizar':\n        if (config.datos && regex) {\n            let count = 0;\n            datos = items.map(r => {\n                if (Object.values(r).some(v => regex.test(String(v)))) {\n                    count++;\n                    return { ...r, ...config.datos };\n                }\n                return r;\n            });\n            msj = `Se actualizaron ${count} filas.`;\n            needUpdate = true;\n        }\n        break;\n\n    case 'agregar_fila':\n        if (config.datos) {\n            datos.push(config.datos);\n            msj = 'Fila agregada.';\n            needUpdate = true;\n        }\n        break;\n\n    case 'agregar_columna':\n        if (config.datos) {\n            const colName = Object.keys(config.datos)[0];\n            const defaultVal = config.datos[colName];\n            datos = items.map(r => ({ ...r, [colName]: defaultVal }));\n            msj = `Columna '${colName}' agregada.`;\n            needUpdate = true;\n        }\n        break;\n}\n\n// Limit result size for the AI to avoid memory issues\nconst filtered = regex ? datos.filter(r => Object.values(r).some(v => regex.test(String(v)))) : datos;\n\nreturn {\n  estado: 'EXITO',\n  mensaje: msj,\n  resultados: filtered.slice(0, 5), // Truncated to 5 rows for AI safety\n  conteo_total: filtered.length,\n  __full_data: datos, // Stays in memory but not passed back to AI if using logic\n  __need_sync: needUpdate\n};"
+      },
+      "id": "e798307b-9f5e-4773-9e85-4cdb0d13a1ed",
+      "name": "Shell Logic V9",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        150,
+        450
+      ]
+    },
+    {
+      "parameters": {
+        "resource": "sheet",
+        "operation": "clear",
+        "documentId": {
+          "__rl": true,
+          "value": "={{ $('Parser V9.2').first().json.file_id }}",
+          "mode": "id"
+        },
+        "sheetName": {
+          "__rl": true,
+          "value": "={{ $('Parser V9.2').first().json.sheet_name || 'Hoja 1' }}",
+          "mode": "name"
+        }
+      },
+      "id": "85bf39a9-b0c3-4d78-aaf8-8395183cfc27",
+      "name": "Limpiar Hoja",
+      "type": "n8n-nodes-base.googleSheets",
+      "typeVersion": 4.5,
+      "position": [
+        400,
+        550
+      ],
+      "credentials": {
+        "googleSheetsOAuth2Api": {
+          "id": "DcHiD0korYVWsEPQ"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "resource": "sheet",
+        "operation": "appendOrUpdate",
+        "documentId": {
+          "__rl": true,
+          "value": "={{ $('Parser V9.2').first().json.file_id }}",
+          "mode": "id"
+        },
+        "sheetName": {
+          "__rl": true,
+          "value": "={{ $('Parser V9.2').first().json.sheet_name || 'Hoja 1' }}",
+          "mode": "name"
+        },
+        "columns": {
+          "mappingMode": "autoMapInputData",
+          "value": {}
+        },
+        "options": {}
+      },
+      "id": "590a9b3b-7890-4307-987d-548e16e8fd46",
+      "name": "Sincronizar Sheets",
+      "type": "n8n-nodes-base.googleSheets",
+      "typeVersion": 4.5,
+      "position": [
+        600,
+        550
+      ],
+      "credentials": {
+        "googleSheetsOAuth2Api": {
+          "id": "DcHiD0korYVWsEPQ"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "conditions": {
+          "options": {
+            "version": 2
+          },
+          "conditions": [
+            {
+              "id": "c1",
+              "leftValue": "={{ $json.__need_sync }}",
+              "rightValue": "",
+              "operator": {
+                "type": "boolean",
+                "operation": "true"
+              }
+            }
+          ],
+          "combinator": "and"
+        }
+      },
+      "id": "4e18e0c8-3927-4723-a787-750e23018809",
+      "name": "¿Sincronizar?",
+      "type": "n8n-nodes-base.if",
+      "typeVersion": 2.2,
+      "position": [
+        350,
+        450
+      ]
+    },
+    {
+      "parameters": {
+        "jsCode": "const items = $input.all();\nif (items.length === 0 || Object.keys(items[0].json).length === 0) return [{ json: { response: { mensaje: 'No hay datos o no se encontraron archivos.' } } }];\nconst prim = items[0].json;\nif (prim.estado !== undefined) {\n  return [{ json: { response: {\n    estado: prim.estado,\n    mensaje: prim.mensaje || '',\n    resultados_muestra: prim.resultados || prim.resultados_muestra || [],\n    total_filas: prim.conteo_total || prim.total_filas || 0,\n    file_id: prim.file_id || ''\n  }} }];\n}\nif (prim.id && prim.name) {\n  return [{ json: { response: {\n    estado: 'EXITO',\n    mensaje: 'Archivos encontrados',\n    resultados_muestra: items.slice(0, 15).map(i => ({ id: i.json.id, name: i.json.name })),\n    total_filas: items.length\n  }} }];\n}\nreturn [{ json: { response: { resultados_muestra: items.map(i => i.json).slice(0, 10) } } }];"
+      },
+      "id": "958ba8c8-6fcb-4196-ab94-7705c21476a5",
+      "name": "Final Out (AI Safety)",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        850,
+        300
+      ]
+    }
+  ],
+  "connections": {
+    "Execute Workflow Trigger": {
+      "main": [
+        [
+          {
+            "node": "Parser V9.2",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Parser V9.2": {
+      "main": [
+        [
+          {
+            "node": "Router V9",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Router V9": {
+      "main": [
+        [
+          {
+            "node": "Google Drive",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "Google Sheets",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "Set Context",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "Google Sheets",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Google Drive": {
+      "main": [
+        [
+          {
+            "node": "Final Out (AI Safety)",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Google Sheets": {
+      "main": [
+        [
+          {
+            "node": "Shell Logic V9",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Shell Logic V9": {
+      "main": [
+        [
+          {
+            "node": "¿Sincronizar?",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "¿Sincronizar?": {
+      "main": [
+        [
+          {
+            "node": "Limpiar Hoja",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "Final Out (AI Safety)",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Limpiar Hoja": {
+      "main": [
+        [
+          {
+            "node": "Sincronizar Sheets",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Sincronizar Sheets": {
+      "main": [
+        [
+          {
+            "node": "Final Out (AI Safety)",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Set Context": {
+      "main": [
+        [
+          {
+            "node": "Final Out (AI Safety)",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    }
+  },
+  "settings": {
+    "executionOrder": "v1"
+  }
+}
