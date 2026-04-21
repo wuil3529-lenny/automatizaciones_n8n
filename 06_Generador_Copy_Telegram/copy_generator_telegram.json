@@ -1,0 +1,1561 @@
+{
+  "name": "copy_generator_telegram",
+  "nodes": [
+    {
+      "parameters": {
+        "httpMethod": "POST",
+        "path": "copy-generator",
+        "responseMode": "onReceived",
+        "options": {}
+      },
+      "id": "cg-001",
+      "name": "Webhook",
+      "type": "n8n-nodes-base.webhook",
+      "typeVersion": 2,
+      "position": [
+        0,
+        600
+      ],
+      "webhookId": "copy-generator-webhook"
+    },
+    {
+      "parameters": {
+        "jsCode": "const body = $input.item.json.body || $input.item.json;\nconst msg = body.message || body.edited_message || {};\nconst chat_id = String(msg.chat?.id || '');\nconst user_id = String(msg.from?.id || chat_id);\nconst user_name = msg.from?.first_name || msg.from?.username || 'Usuario';\nconst text = (msg.text || '').trim();\n\nif (!chat_id || !text) return [];\n\n// Detectar si es comando explícito\nconst is_command = text.startsWith('/');\nlet command = 'unknown';\nlet parameter = '';\n\nif (is_command) {\n  const parts = text.split(/\\s+/);\n  command = parts[0].toLowerCase().split('@')[0];\n  parameter = parts.slice(1).join(' ').trim();\n}\n\nreturn [{ json: { chat_id, user_id, user_name, text, command, parameter, is_command } }];"
+      },
+      "id": "cg-002",
+      "name": "Parse Telegram",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        220,
+        600
+      ]
+    },
+    {
+      "parameters": {
+        "conditions": {
+          "options": {
+            "caseSensitive": false,
+            "leftValue": "",
+            "typeValidation": "loose"
+          },
+          "combinator": "and",
+          "conditions": [
+            {
+              "id": "c1",
+              "leftValue": "={{ $json.is_command }}",
+              "rightValue": true,
+              "operator": {
+                "type": "boolean",
+                "operation": "true",
+                "name": "filter.operator.true"
+              }
+            }
+          ]
+        },
+        "options": {}
+      },
+      "id": "cg-intent-01",
+      "name": "Check Format",
+      "type": "n8n-nodes-base.if",
+      "typeVersion": 2,
+      "position": [
+        440,
+        600
+      ]
+    },
+    {
+      "parameters": {
+        "jsCode": "const { text } = $input.item.json;\n\nconst prompt = `Analiza el siguiente mensaje de un usuario en Telegram para un asistente de Copywriting y determina su intención exacta.\\n\\nCOMANDOS DISPONIBLES:\\n- /setup [file_id]: Si el usuario quiere configurar su perfil o menciona cargar un archivo/id de Google Drive.\\n- /copy [tema]: Si el usuario pide generar un copy, escribir algo nuevo o da un tema.\\n- /copy_hoy: Si el usuario quiere el copy de hoy o pregunta qué toca publicar hoy.\\n- /stats: Si el usuario quiere ver estadísticas, rendimiento o qué ha hecho.\\n- /pattern: Si el usuario quiere ver su patrón de escritura o estilo.\\n- /help: Si el usuario está perdido o pide ayuda.\\n- /reset: Si el usuario quiere borrar todo o reiniciar.\\n\\nReglas:\\n1. Responde ÚNICAMENTE con un JSON válido.\\n2. El JSON debe tener: { \"command\": \"/comando\", \"parameter\": \"texto adicional o id\" }.\\n3. Si el usuario solo da un tema (ej: \"nutrición\"), asume /copy.\\n\\nMENSAJE DEL USUARIO:\\n\"${text}\"\\n\\nJSON:`;\n\nconst body = { \n  contents: [{ parts: [{ text: prompt }] }], \n  generationConfig: { temperature: 0.1, maxOutputTokens: 200 }\n};\n\nreturn [{ json: { ...$input.item.json, gemini_intent_body: JSON.stringify(body) } }];"
+      },
+      "id": "cg-intent-02",
+      "name": "Build Intent Prompt",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        660,
+        750
+      ]
+    },
+    {
+      "parameters": {
+        "method": "POST",
+        "url": "https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash:generateContent",
+        "sendHeaders": true,
+        "headerParameters": {
+          "parameters": [
+            {
+              "name": "x-goog-api-key",
+              "value": "={{ $env.GEMINI_API_KEY }}"
+            },
+            {
+              "name": "Content-Type",
+              "value": "application/json"
+            }
+          ]
+        },
+        "sendBody": true,
+        "options": {},
+        "specifyBody": "string",
+        "body": "={{ $json.gemini_intent_body }}"
+      },
+      "id": "cg-intent-03",
+      "name": "Gemini Detect Intent",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [
+        880,
+        750
+      ]
+    },
+    {
+      "parameters": {
+        "jsCode": "const raw = $input.item.json;\nlet text = '';\ntry { text = raw.candidates?.[0]?.content?.parts?.[0]?.text || ''; } catch(e) {}\ntext = text.replace(/```json\\n?/g, '').replace(/```\\n?/g, '').trim();\n\nlet result = { command: '/copy', parameter: '' };\ntry {\n  result = JSON.parse(text);\n} catch(e) {\n  const m = text.match(/\\{[\\s\\S]*\\}/);\n  if (m) { try { result = JSON.parse(m[0]); } catch(e2) {} }\n}\n\nconst original = $('Check Format').item.json;\nreturn [{ json: { ...original, command: result.command, parameter: result.parameter, is_command: true } }];"
+      },
+      "id": "cg-intent-04",
+      "name": "Parse Intent",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        1100,
+        750
+      ]
+    },
+    {
+      "parameters": {
+        "mode": "rules",
+        "rules": {
+          "values": [
+            {
+              "conditions": {
+                "options": {
+                  "caseSensitive": false,
+                  "leftValue": "",
+                  "typeValidation": "loose"
+                },
+                "combinator": "and",
+                "conditions": [
+                  {
+                    "id": "r1",
+                    "leftValue": "={{ $json.command }}",
+                    "rightValue": "/setup",
+                    "operator": {
+                      "type": "string",
+                      "operation": "equals",
+                      "name": "filter.operator.equals"
+                    }
+                  }
+                ]
+              },
+              "output": 0,
+              "outputKey": "setup"
+            },
+            {
+              "conditions": {
+                "options": {
+                  "caseSensitive": false,
+                  "leftValue": "",
+                  "typeValidation": "loose"
+                },
+                "combinator": "and",
+                "conditions": [
+                  {
+                    "id": "r2",
+                    "leftValue": "={{ $json.command }}",
+                    "rightValue": "/copy",
+                    "operator": {
+                      "type": "string",
+                      "operation": "equals",
+                      "name": "filter.operator.equals"
+                    }
+                  }
+                ]
+              },
+              "output": 1,
+              "outputKey": "copy"
+            },
+            {
+              "conditions": {
+                "options": {
+                  "caseSensitive": false,
+                  "leftValue": "",
+                  "typeValidation": "loose"
+                },
+                "combinator": "and",
+                "conditions": [
+                  {
+                    "id": "r3",
+                    "leftValue": "={{ $json.command }}",
+                    "rightValue": "/copy_hoy",
+                    "operator": {
+                      "type": "string",
+                      "operation": "equals",
+                      "name": "filter.operator.equals"
+                    }
+                  }
+                ]
+              },
+              "output": 2,
+              "outputKey": "copy_hoy"
+            },
+            {
+              "conditions": {
+                "options": {
+                  "caseSensitive": false,
+                  "leftValue": "",
+                  "typeValidation": "loose"
+                },
+                "combinator": "and",
+                "conditions": [
+                  {
+                    "id": "r4",
+                    "leftValue": "={{ $json.command }}",
+                    "rightValue": "/help",
+                    "operator": {
+                      "type": "string",
+                      "operation": "equals",
+                      "name": "filter.operator.equals"
+                    }
+                  }
+                ]
+              },
+              "output": 3,
+              "outputKey": "help"
+            },
+            {
+              "conditions": {
+                "options": {
+                  "caseSensitive": false,
+                  "leftValue": "",
+                  "typeValidation": "loose"
+                },
+                "combinator": "and",
+                "conditions": [
+                  {
+                    "id": "r5",
+                    "leftValue": "={{ $json.command }}",
+                    "rightValue": "/stats",
+                    "operator": {
+                      "type": "string",
+                      "operation": "equals",
+                      "name": "filter.operator.equals"
+                    }
+                  }
+                ]
+              },
+              "output": 4,
+              "outputKey": "stats"
+            },
+            {
+              "conditions": {
+                "options": {
+                  "caseSensitive": false,
+                  "leftValue": "",
+                  "typeValidation": "loose"
+                },
+                "combinator": "and",
+                "conditions": [
+                  {
+                    "id": "r6",
+                    "leftValue": "={{ $json.command }}",
+                    "rightValue": "/reset",
+                    "operator": {
+                      "type": "string",
+                      "operation": "equals",
+                      "name": "filter.operator.equals"
+                    }
+                  }
+                ]
+              },
+              "output": 5,
+              "outputKey": "reset"
+            },
+            {
+              "conditions": {
+                "options": {
+                  "caseSensitive": false,
+                  "leftValue": "",
+                  "typeValidation": "loose"
+                },
+                "combinator": "and",
+                "conditions": [
+                  {
+                    "id": "r7",
+                    "leftValue": "={{ $json.command }}",
+                    "rightValue": "/pattern",
+                    "operator": {
+                      "type": "string",
+                      "operation": "equals",
+                      "name": "filter.operator.equals"
+                    }
+                  }
+                ]
+              },
+              "output": 6,
+              "outputKey": "pattern"
+            }
+          ]
+        },
+        "fallbackOutput": "extra",
+        "options": {}
+      },
+      "id": "cg-003",
+      "name": "Router Comandos",
+      "type": "n8n-nodes-base.switch",
+      "typeVersion": 3.2,
+      "position": [
+        1320,
+        600
+      ]
+    },
+    {
+      "parameters": {
+        "operation": "download",
+        "fileId": {
+          "__rl": true,
+          "value": "={{ $json.parameter }}",
+          "mode": "id"
+        },
+        "options": {}
+      },
+      "id": "cg-s01",
+      "name": "GDrive Download",
+      "type": "n8n-nodes-base.googleDrive",
+      "typeVersion": 3,
+      "position": [
+        1580,
+        0
+      ],
+      "credentials": {
+        "googleDriveOAuth2Api": {
+          "id": "qvHiDGY3ay7V5hc3",
+          "name": "Google Drive account"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "jsCode": "const parsed = $('Router Comandos').item.json;\nconst binary = $input.item.binary || {};\nlet notebookContent = '';\nconst binaryKey = Object.keys(binary)[0];\nif (binaryKey) {\n  notebookContent = Buffer.from(binary[binaryKey].data, 'base64').toString('utf-8');\n}\nif (!notebookContent) notebookContent = parsed.parameter || 'Sin contenido';\nreturn [{ json: { chat_id: parsed.chat_id, user_id: parsed.user_id, user_name: parsed.user_name, notebook_content: notebookContent } }];"
+      },
+      "id": "cg-s02",
+      "name": "Extract Notebook Text",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        1800,
+        0
+      ]
+    },
+    {
+      "parameters": {
+        "jsCode": "const { chat_id, user_id, user_name, notebook_content } = $input.item.json;\n\nconst prompt = `Eres un experto extrayendo información estructurada de notebooks de marketing.\\n\\nAnaliza el siguiente notebook y extrae EXACTAMENTE esta información. Devuelve SOLO JSON válido sin markdown:\\n\\n{\\n  \"informacion_general\": {\\n    \"nombre\": \"nombre de la agencia\",\\n    \"nicho\": \"nicho principal\",\\n    \"publico_objetivo\": \"descripción del público\",\\n    \"valores\": [\"valor1\", \"valor2\"],\\n    \"diferenciador\": \"diferenciador único\"\\n  },\\n  \"copys_mejores\": [{\"id\": 1, \"titulo\": \"Copy #1\", \"contenido\": \"texto completo\"}],\\n  \"patron_estructura\": {\\n    \"tipo_gancho\": \"Pregunta/Historia/Estadística/Afirmación\",\\n    \"estructura_desarrollo\": \"Problema → Solución → Proof\",\\n    \"tipo_cierre\": \"CTA directo/Pregunta/Reflexión\",\\n    \"tono_general\": \"descripción del tono\",\\n    \"palabras_clave\": [\"palabra1\", \"palabra2\"],\\n    \"emociones\": [\"esperanza\", \"urgencia\"]\\n  },\\n  \"plan_diario\": {\"lunes\": \"tema\", \"martes\": \"tema\", \"miercoles\": \"tema\", \"jueves\": \"tema\", \"viernes\": \"tema\", \"sabado\": \"tema\", \"domingo\": \"tema\"},\\n  \"formato_final\": {\"min_palabras\": 150, \"max_palabras\": 300, \"estructura_visual\": \"descripción\", \"cantidad_emojis\": 3, \"tipo_parrafos\": \"cortos\"}\\n}\\n\\nNOTEBOOK:\\n${notebook_content}`;\n\nconst body = { contents: [{ parts: [{ text: prompt }] }], generationConfig: { temperature: 0.3, maxOutputTokens: 2000 } };\n\nreturn [{ json: { chat_id, user_id, user_name, gemini_body: JSON.stringify(body) } }];"
+      },
+      "id": "cg-s03",
+      "name": "Build Extract Body",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        2020,
+        0
+      ]
+    },
+    {
+      "parameters": {
+        "method": "POST",
+        "url": "https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash:generateContent",
+        "sendHeaders": true,
+        "headerParameters": {
+          "parameters": [
+            {
+              "name": "x-goog-api-key",
+              "value": "={{ $env.GEMINI_API_KEY }}"
+            },
+            {
+              "name": "Content-Type",
+              "value": "application/json"
+            }
+          ]
+        },
+        "sendBody": true,
+        "options": {},
+        "specifyBody": "string",
+        "body": "={{ $json.gemini_body }}"
+      },
+      "id": "cg-s04",
+      "name": "Gemini Extract Pattern",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [
+        2240,
+        0
+      ]
+    },
+    {
+      "parameters": {
+        "jsCode": "const prev = $('Build Extract Body').item.json;\nconst raw = $input.item.json;\n\nlet text = '';\ntry { text = raw.candidates?.[0]?.content?.parts?.[0]?.text || ''; } catch(e) {}\ntext = text.replace(/```json\\n?/g, '').replace(/```\\n?/g, '').trim();\n\nlet clientData = {};\ntry {\n  clientData = JSON.parse(text);\n} catch(e) {\n  const m = text.match(/\\{[\\s\\S]*\\}/);\n  if (m) { try { clientData = JSON.parse(m[0]); } catch(e2) {} }\n}\n\nreturn [{ json: { chat_id: prev.chat_id, user_id: prev.user_id, user_name: prev.user_name, client_data: clientData, parse_ok: Object.keys(clientData).length > 0 } }];"
+      },
+      "id": "cg-s05",
+      "name": "Parse Extract Response",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        2460,
+        0
+      ]
+    },
+    {
+      "parameters": {
+        "method": "POST",
+        "url": "https://xkxjocoaqtiaevjbdwhe.supabase.co/rest/v1/clientes",
+        "sendHeaders": true,
+        "headerParameters": {
+          "parameters": [
+            {
+              "name": "apikey",
+              "value": "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6InhreGpvY29hcXRpYWV2amJkd2hlIiwicm9sZSI6ImFub24iLCJpYXQiOjE3NzUwODI4MDEsImV4cCI6MjA5MDY1ODgwMX0.6-stczeYYby01g1qDUz8jh99GwtUTa2oxaWrkmncs3Y"
+            },
+            {
+              "name": "Authorization",
+              "value": "Bearer eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6InhreGpvY29hcXRpYWV2amJkd2hlIiwicm9sZSI6ImFub24iLCJpYXQiOjE3NzUwODI4MDEsImV4cCI6MjA5MDY1ODgwMX0.6-stczeYYby01g1qDUz8jh99GwtUTa2oxaWrkmncs3Y"
+            },
+            {
+              "name": "Content-Type",
+              "value": "application/json"
+            },
+            {
+              "name": "Prefer",
+              "value": "resolution=merge-duplicates,return=representation"
+            }
+          ]
+        },
+        "sendBody": true,
+        "specifyBody": "json",
+        "jsonBody": "={{ JSON.stringify({ usuario_id: $json.user_id, cliente_nombre: $json.client_data.informacion_general?.nombre || 'Sin nombre', nicho: $json.client_data.informacion_general?.nicho || '', informacion_general: $json.client_data.informacion_general || {}, copys_mejores: $json.client_data.copys_mejores || [], patron_estructura: $json.client_data.patron_estructura || {}, plan_diario: $json.client_data.plan_diario || {}, formato_final: $json.client_data.formato_final || {}, ultima_actualizacion: new Date().toISOString(), activo: true }) }}",
+        "options": {}
+      },
+      "id": "cg-s06",
+      "name": "SB Upsert Cliente",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [
+        2680,
+        0
+      ]
+    },
+    {
+      "parameters": {
+        "jsCode": "const d = $('Parse Extract Response').item.json;\nconst cd = d.client_data || {};\nconst gi = cd.informacion_general || {};\nconst p = cd.patron_estructura || {};\nconst copys = cd.copys_mejores || [];\n\nconst msg = `✅ SETUP COMPLETADO\\n\\nHe analizado y guardé tu perfil:\\n\\n📊 Nombre: ${gi.nombre || 'N/A'}\\n🎯 Nicho: ${gi.nicho || 'N/A'}\\n🗣 Tono: ${p.tono_general || 'N/A'}\\n🪝 Gancho típico: ${p.tipo_gancho || 'N/A'}\\n📝 Copys analizados: ${copys.length}\\n\\nCOMANDOS:\\n/copy [tema] → Genera copy\\n/copy_hoy → Copy del día\\n/stats → Estadísticas\\n/pattern → Ver tu patrón\\n/reset → Borrar y reiniciar`;\n\nreturn [{ json: { chat_id: d.chat_id, message_text: msg } }];"
+      },
+      "id": "cg-s07",
+      "name": "Build Setup Confirm",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        2900,
+        0
+      ]
+    },
+    {
+      "parameters": {
+        "method": "POST",
+        "url": "https://api.telegram.org/bot8778169998:AAEp0b4PZKPL504PgamTDDDsihnH5hUmHQ4/sendMessage",
+        "sendBody": true,
+        "bodyParameters": {
+          "parameters": [
+            {
+              "name": "chat_id",
+              "value": "={{ $json.chat_id }}"
+            },
+            {
+              "name": "text",
+              "value": "={{ $json.message_text }}"
+            }
+          ]
+        },
+        "options": {}
+      },
+      "id": "cg-s08",
+      "name": "Telegram Setup OK",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [
+        3120,
+        0
+      ]
+    },
+    {
+      "parameters": {
+        "method": "GET",
+        "url": "=https://xkxjocoaqtiaevjbdwhe.supabase.co/rest/v1/clientes?usuario_id=eq.{{ $json.user_id }}&activo=eq.true&select=*",
+        "sendHeaders": true,
+        "headerParameters": {
+          "parameters": [
+            {
+              "name": "apikey",
+              "value": "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6InhreGpvY29hcXRpYWV2amJkd2hlIiwicm9sZSI6ImFub24iLCJpYXQiOjE3NzUwODI4MDEsImV4cCI6MjA5MDY1ODgwMX0.6-stczeYYby01g1qDUz8jh99GwtUTa2oxaWrkmncs3Y"
+            },
+            {
+              "name": "Authorization",
+              "value": "Bearer eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6InhreGpvY29hcXRpYWV2amJkd2hlIiwicm9sZSI6ImFub24iLCJpYXQiOjE3NzUwODI4MDEsImV4cCI6MjA5MDY1ODgwMX0.6-stczeYYby01g1qDUz8jh99GwtUTa2oxaWrkmncs3Y"
+            }
+          ]
+        },
+        "options": {}
+      },
+      "id": "cg-c01",
+      "name": "SB Read Cliente Copy",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [
+        1580,
+        400
+      ]
+    },
+    {
+      "parameters": {
+        "jsCode": "const parsed = $('Router Comandos').item.json;\nconst rows = Array.isArray($input.item.json) ? $input.item.json : [];\nconst cliente = rows[0] || null;\n\nif (!cliente) {\n  return [{ json: { chat_id: parsed.chat_id, no_client: true, gemini_body: '' } }];\n}\n\nconst patron = cliente.patron_estructura || {};\nconst copys = (cliente.copys_mejores || []).map((c, i) => `COPY ${i+1}:\\n${c.contenido || c}`).join('\\n\\n---\\n\\n');\nconst formato = cliente.formato_final || {};\nconst tema = parsed.parameter || 'general';\n\nconst prompt = `ERES UN EXPERTO GENERADOR DE COPYS CON PATRÓN EXACTO\\n\\nPATRÓN DEL CLIENTE:\\n${JSON.stringify(patron, null, 2)}\\n\\nCOPYS DE REFERENCIA:\\n${copys}\\n\\nFORMATO:\\n- Mínimo: ${formato.min_palabras || 150} palabras\\n- Máximo: ${formato.max_palabras || 300} palabras\\n- Emojis: ${formato.cantidad_emojis || 3}\\n- Párrafos: ${formato.tipo_parrafos || 'cortos'}\\n\\nPALABRAS CLAVE A INCLUIR: ${(patron.palabras_clave || []).join(', ')}\\nEMOCIONES A TOCAR: ${(patron.emociones || []).join(', ')}\\n\\nTEMA: ${tema}\\n\\nReglas:\\n✓ Mismo tipo de gancho\\n✓ Misma estructura\\n✓ Mismo tono\\n✓ Devuelve SOLO el copy, sin análisis\\n\\nCOPY FINAL:`;\n\nconst body = { contents: [{ parts: [{ text: prompt }] }], generationConfig: { temperature: 0.8, maxOutputTokens: 2500 } };\n\nreturn [{ json: { chat_id: parsed.chat_id, user_id: parsed.user_id, tema, no_client: false, gemini_body: JSON.stringify(body) } }];"
+      },
+      "id": "cg-c02",
+      "name": "Build Generate Body",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        1800,
+        400
+      ]
+    },
+    {
+      "parameters": {
+        "method": "POST",
+        "url": "https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash:generateContent",
+        "sendHeaders": true,
+        "headerParameters": {
+          "parameters": [
+            {
+              "name": "x-goog-api-key",
+              "value": "={{ $env.GEMINI_API_KEY }}"
+            },
+            {
+              "name": "Content-Type",
+              "value": "application/json"
+            }
+          ]
+        },
+        "sendBody": true,
+        "options": {},
+        "specifyBody": "string",
+        "body": "={{ $json.gemini_body }}"
+      },
+      "id": "cg-c03",
+      "name": "Gemini Generate Copy",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [
+        2020,
+        400
+      ]
+    },
+    {
+      "parameters": {
+        "jsCode": "const prev = $('Build Generate Body').item.json;\nconst raw = $input.item.json;\n\nif (prev.no_client) {\n  return [{ json: { chat_id: prev.chat_id, copy_text: '⚠️ No tienes perfil configurado. Usa /setup [file_id] para comenzar.', tema: '', is_copy: false } }];\n}\n\nconst copyText = (raw.candidates?.[0]?.content?.parts?.[0]?.text || '').trim();\nreturn [{ json: { chat_id: prev.chat_id, user_id: prev.user_id, tema: prev.tema, copy_text: copyText || '⚠️ Error al generar. Intenta de nuevo.', is_copy: !!copyText } }];"
+      },
+      "id": "cg-c04",
+      "name": "Extract Copy",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        2240,
+        400
+      ]
+    },
+    {
+      "parameters": {
+        "method": "POST",
+        "url": "https://xkxjocoaqtiaevjbdwhe.supabase.co/rest/v1/copys_generados",
+        "sendHeaders": true,
+        "headerParameters": {
+          "parameters": [
+            {
+              "name": "apikey",
+              "value": "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6InhreGpvY29hcXRpYWV2amJkd2hlIiwicm9sZSI6ImFub24iLCJpYXQiOjE3NzUwODI4MDEsImV4cCI6MjA5MDY1ODgwMX0.6-stczeYYby01g1qDUz8jh99GwtUTa2oxaWrkmncs3Y"
+            },
+            {
+              "name": "Authorization",
+              "value": "Bearer eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6InhreGpvY29hcXRpYWV2amJkd2hlIiwicm9sZSI6ImFub24iLCJpYXQiOjE3NzUwODI4MDEsImV4cCI6MjA5MDY1ODgwMX0.6-stczeYYby01g1qDUz8jh99GwtUTa2oxaWrkmncs3Y"
+            },
+            {
+              "name": "Content-Type",
+              "value": "application/json"
+            },
+            {
+              "name": "Prefer",
+              "value": "return=representation"
+            }
+          ]
+        },
+        "sendBody": true,
+        "specifyBody": "json",
+        "jsonBody": "={{ JSON.stringify({ usuario_id: $json.user_id, tema: $json.tema, copy_generado: $json.copy_text, fecha: new Date().toISOString(), tipo_comando: '/copy' }) }}",
+        "options": {}
+      },
+      "id": "cg-c05",
+      "name": "SB Insert Copy Stats",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [
+        2460,
+        400
+      ]
+    },
+    {
+      "parameters": {
+        "jsCode": "const d = $('Extract Copy').item.json;\nconst footer = d.is_copy ? '\\n\\n─────\\n📋 /copy_hoy para el de hoy | /stats para ver más' : '';\nreturn [{ json: { chat_id: d.chat_id, message_text: d.copy_text + footer } }];"
+      },
+      "id": "cg-c06",
+      "name": "Build Copy Message",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        2680,
+        400
+      ]
+    },
+    {
+      "parameters": {
+        "method": "POST",
+        "url": "https://api.telegram.org/bot8778169998:AAEp0b4PZKPL504PgamTDDDsihnH5hUmHQ4/sendMessage",
+        "sendBody": true,
+        "bodyParameters": {
+          "parameters": [
+            {
+              "name": "chat_id",
+              "value": "={{ $json.chat_id }}"
+            },
+            {
+              "name": "text",
+              "value": "={{ $json.message_text }}"
+            }
+          ]
+        },
+        "options": {}
+      },
+      "id": "cg-c07",
+      "name": "Telegram Send Copy",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [
+        2900,
+        400
+      ]
+    },
+    {
+      "parameters": {
+        "jsCode": "const parsed = $('Router Comandos').item.json;\nconst dias = { 0: 'domingo', 1: 'lunes', 2: 'martes', 3: 'miercoles', 4: 'jueves', 5: 'viernes', 6: 'sabado' };\nconst dia_hoy = dias[new Date().getDay()];\nreturn [{ json: { ...parsed, dia_hoy } }];"
+      },
+      "id": "cg-h01",
+      "name": "Get Day",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        1580,
+        800
+      ]
+    },
+    {
+      "parameters": {
+        "method": "GET",
+        "url": "=https://xkxjocoaqtiaevjbdwhe.supabase.co/rest/v1/clientes?usuario_id=eq.{{ $json.user_id }}&activo=eq.true&select=*",
+        "sendHeaders": true,
+        "headerParameters": {
+          "parameters": [
+            {
+              "name": "apikey",
+              "value": "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6InhreGpvY29hcXRpYWV2amJkd2hlIiwicm9sZSI6ImFub24iLCJpYXQiOjE3NzUwODI4MDEsImV4cCI6MjA5MDY1ODgwMX0.6-stczeYYby01g1qDUz8jh99GwtUTa2oxaWrkmncs3Y"
+            },
+            {
+              "name": "Authorization",
+              "value": "Bearer eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6InhreGpvY29hcXRpYWV2amJkd2hlIiwicm9sZSI6ImFub24iLCJpYXQiOjE3NzUwODI4MDEsImV4cCI6MjA5MDY1ODgwMX0.6-stczeYYby01g1qDUz8jh99GwtUTa2oxaWrkmncs3Y"
+            }
+          ]
+        },
+        "options": {}
+      },
+      "id": "cg-h02",
+      "name": "SB Read Cliente Hoy",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [
+        1800,
+        800
+      ]
+    },
+    {
+      "parameters": {
+        "jsCode": "const getDay = $('Get Day').item.json;\nconst rows = Array.isArray($input.item.json) ? $input.item.json : [];\nconst cliente = rows[0] || null;\n\nif (!cliente) {\n  return [{ json: { chat_id: getDay.chat_id, no_client: true, gemini_body: '', dia_hoy: getDay.dia_hoy, tema: '' } }];\n}\n\nconst planDiario = cliente.plan_diario || {};\nconst tema = planDiario[getDay.dia_hoy] || getDay.dia_hoy || 'general';\nconst patron = cliente.patron_estructura || {};\nconst copys = (cliente.copys_mejores || []).map((c, i) => `COPY ${i+1}:\\n${c.contenido || c}`).join('\\n\\n---\\n\\n');\nconst formato = cliente.formato_final || {};\n\nconst prompt = `ERES UN EXPERTO GENERADOR DE COPYS CON PATRÓN EXACTO\\n\\nPATRÓN DEL CLIENTE:\\n${JSON.stringify(patron, null, 2)}\\n\\nCOPYS DE REFERENCIA:\\n${copys}\\n\\nFORMATO:\\n- Mínimo: ${formato.min_palabras || 150} palabras\\n- Máximo: ${formato.max_palabras || 300} palabras\\n- Emojis: ${formato.cantidad_emojis || 3}\\n- Párrafos: ${formato.tipo_parrafos || 'cortos'}\\n\\nTEMA DEL DÍA (${getDay.dia_hoy.toUpperCase()}): ${tema}\\n\\nGenera el copy siguiendo exactamente el patrón. Devuelve SOLO el copy.\\n\\nCOPY FINAL:`;\n\nconst body = { contents: [{ parts: [{ text: prompt }] }], generationConfig: { temperature: 0.8, maxOutputTokens: 2500 } };\n\nreturn [{ json: { chat_id: getDay.chat_id, user_id: getDay.user_id, dia_hoy: getDay.dia_hoy, tema, no_client: false, gemini_body: JSON.stringify(body) } }];"
+      },
+      "id": "cg-h03",
+      "name": "Build Generate Hoy Body",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        2020,
+        800
+      ]
+    },
+    {
+      "parameters": {
+        "method": "POST",
+        "url": "https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash:generateContent",
+        "sendHeaders": true,
+        "headerParameters": {
+          "parameters": [
+            {
+              "name": "x-goog-api-key",
+              "value": "={{ $env.GEMINI_API_KEY }}"
+            },
+            {
+              "name": "Content-Type",
+              "value": "application/json"
+            }
+          ]
+        },
+        "sendBody": true,
+        "options": {},
+        "specifyBody": "string",
+        "body": "={{ $json.gemini_body }}"
+      },
+      "id": "cg-h04",
+      "name": "Gemini Generate Hoy",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [
+        2240,
+        800
+      ]
+    },
+    {
+      "parameters": {
+        "jsCode": "const prev = $('Build Generate Hoy Body').item.json;\nconst raw = $input.item.json;\n\nif (prev.no_client) {\n  return [{ json: { chat_id: prev.chat_id, copy_text: '⚠️ No tienes perfil configurado. Usa /setup [file_id] para comenzar.', dia_hoy: prev.dia_hoy, tema: '', is_copy: false } }];\n}\n\nconst copyText = (raw.candidates?.[0]?.content?.parts?.[0]?.text || '').trim();\nreturn [{ json: { chat_id: prev.chat_id, user_id: prev.user_id, dia_hoy: prev.dia_hoy, tema: prev.tema, copy_text: copyText || '⚠️ Error al generar. Intenta de nuevo.', is_copy: !!copyText } }];"
+      },
+      "id": "cg-h05",
+      "name": "Extract Copy Hoy",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        2460,
+        800
+      ]
+    },
+    {
+      "parameters": {
+        "method": "POST",
+        "url": "https://xkxjocoaqtiaevjbdwhe.supabase.co/rest/v1/copys_generados",
+        "sendHeaders": true,
+        "headerParameters": {
+          "parameters": [
+            {
+              "name": "apikey",
+              "value": "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6InhreGpvY29hcXRpYWV2amJkd2hlIiwicm9sZSI6ImFub24iLCJpYXQiOjE3NzUwODI4MDEsImV4cCI6MjA5MDY1ODgwMX0.6-stczeYYby01g1qDUz8jh99GwtUTa2oxaWrkmncs3Y"
+            },
+            {
+              "name": "Authorization",
+              "value": "Bearer eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6InhreGpvY29hcXRpYWV2amJkd2hlIiwicm9sZSI6ImFub24iLCJpYXQiOjE3NzUwODI4MDEsImV4cCI6MjA5MDY1ODgwMX0.6-stczeYYby01g1qDUz8jh99GwtUTa2oxaWrkmncs3Y"
+            },
+            {
+              "name": "Content-Type",
+              "value": "application/json"
+            },
+            {
+              "name": "Prefer",
+              "value": "return=representation"
+            }
+          ]
+        },
+        "sendBody": true,
+        "specifyBody": "json",
+        "jsonBody": "={{ JSON.stringify({ usuario_id: $json.user_id, tema: $json.tema, copy_generado: $json.copy_text, fecha: new Date().toISOString(), tipo_comando: '/copy_hoy' }) }}",
+        "options": {}
+      },
+      "id": "cg-h06",
+      "name": "SB Insert Hoy Stats",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [
+        2680,
+        800
+      ]
+    },
+    {
+      "parameters": {
+        "jsCode": "const d = $('Extract Copy Hoy').item.json;\nconst diaLabel = d.dia_hoy ? d.dia_hoy.charAt(0).toUpperCase() + d.dia_hoy.slice(1) : '';\nconst header = d.is_copy ? `📅 Copy de hoy (${diaLabel}): ${d.tema}\\n\\n` : '';\nconst footer = d.is_copy ? '\\n\\n─────\\n¿Otro tema? Usa /copy [tema]' : '';\nreturn [{ json: { chat_id: d.chat_id, message_text: header + d.copy_text + footer } }];"
+      },
+      "id": "cg-h07",
+      "name": "Build Copy Hoy Msg",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        2900,
+        800
+      ]
+    },
+    {
+      "parameters": {
+        "method": "POST",
+        "url": "https://api.telegram.org/bot8778169998:AAEp0b4PZKPL504PgamTDDDsihnH5hUmHQ4/sendMessage",
+        "sendBody": true,
+        "bodyParameters": {
+          "parameters": [
+            {
+              "name": "chat_id",
+              "value": "={{ $json.chat_id }}"
+            },
+            {
+              "name": "text",
+              "value": "={{ $json.message_text }}"
+            }
+          ]
+        },
+        "options": {}
+      },
+      "id": "cg-h08",
+      "name": "Telegram Send Copy Hoy",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [
+        3120,
+        800
+      ]
+    },
+    {
+      "parameters": {
+        "jsCode": "const { chat_id } = $input.item.json;\nconst msg = '🤖 COMANDOS DISPONIBLES:\\n\\n/copy [tema]\\n→ Genera un copy sobre el tema\\nEjemplo: /copy consultoría\\n\\n/copy_hoy\\n→ Copy del tema del día según tu plan\\n\\n/setup [google_drive_file_id]\\n→ Carga tu notebook desde Google Drive\\n\\n/stats\\n→ Estadísticas de copys generados\\n\\n/pattern\\n→ Ver tu patrón de escritura identificado\\n\\n/reset\\n→ Borrar información y empezar de nuevo';\nreturn [{ json: { chat_id, message_text: msg } }];"
+      },
+      "id": "cg-help1",
+      "name": "Build Help",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        1580,
+        1200
+      ]
+    },
+    {
+      "parameters": {
+        "method": "POST",
+        "url": "https://api.telegram.org/bot8778169998:AAEp0b4PZKPL504PgamTDDDsihnH5hUmHQ4/sendMessage",
+        "sendBody": true,
+        "bodyParameters": {
+          "parameters": [
+            {
+              "name": "chat_id",
+              "value": "={{ $json.chat_id }}"
+            },
+            {
+              "name": "text",
+              "value": "={{ $json.message_text }}"
+            }
+          ]
+        },
+        "options": {}
+      },
+      "id": "cg-help2",
+      "name": "Telegram Help",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [
+        1800,
+        1200
+      ]
+    },
+    {
+      "parameters": {
+        "method": "GET",
+        "url": "=https://xkxjocoaqtiaevjbdwhe.supabase.co/rest/v1/copys_generados?usuario_id=eq.{{ $json.user_id }}&select=tema,fecha,tipo_comando&order=fecha.desc",
+        "sendHeaders": true,
+        "headerParameters": {
+          "parameters": [
+            {
+              "name": "apikey",
+              "value": "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6InhreGpvY29hcXRpYWV2amJkd2hlIiwicm9sZSI6ImFub24iLCJpYXQiOjE3NzUwODI4MDEsImV4cCI6MjA5MDY1ODgwMX0.6-stczeYYby01g1qDUz8jh99GwtUTa2oxaWrkmncs3Y"
+            },
+            {
+              "name": "Authorization",
+              "value": "Bearer eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6InhreGpvY29hcXRpYWV2amJkd2hlIiwicm9sZSI6ImFub24iLCJpYXQiOjE3NzUwODI4MDEsImV4cCI6MjA5MDY1ODgwMX0.6-stczeYYby01g1qDUz8jh99GwtUTa2oxaWrkmncs3Y"
+            }
+          ]
+        },
+        "options": {}
+      },
+      "id": "cg-st01",
+      "name": "SB Query Stats",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [
+        1580,
+        1500
+      ]
+    },
+    {
+      "parameters": {
+        "jsCode": "const parsed = $('Router Comandos').item.json;\nconst rows = Array.isArray($input.item.json) ? $input.item.json : [];\n\nif (rows.length === 0) {\n  return [{ json: { chat_id: parsed.chat_id, message_text: '📊 Aún no has generado copys. Usa /copy [tema] para comenzar.' } }];\n}\n\nconst total = rows.length;\nconst semanaAtras = new Date(Date.now() - 7 * 24 * 60 * 60 * 1000);\nconst estaSemana = rows.filter(r => new Date(r.fecha) >= semanaAtras).length;\n\nconst temaCount = {};\nrows.forEach(r => { const t = r.tema || 'general'; temaCount[t] = (temaCount[t] || 0) + 1; });\n\nconst temasStr = Object.entries(temaCount).sort((a,b) => b[1]-a[1]).slice(0,5).map(([t,c]) => `  • ${t}: ${c}`).join('\\n');\n\nconst ultimo = rows[0];\nconst ultimaFecha = ultimo ? new Date(ultimo.fecha).toLocaleDateString('es-ES') : 'N/A';\n\nconst msg = `📊 ESTADÍSTICAS\\n\\n📝 Total copys: ${total}\\n📅 Esta semana: ${estaSemana}\\n🕐 Último: ${ultimaFecha} — ${ultimo?.tema || 'N/A'}\\n\\n🏷 Temas más usados:\\n${temasStr}`;\n\nreturn [{ json: { chat_id: parsed.chat_id, message_text: msg } }];"
+      },
+      "id": "cg-st02",
+      "name": "Format Stats",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        1800,
+        1500
+      ]
+    },
+    {
+      "parameters": {
+        "method": "POST",
+        "url": "=https://api.telegram.org/bot8778169998:AAEp0b4PZKPL504PgamTDDDsihnH5hUmHQ4/sendMessage",
+        "sendBody": true,
+        "bodyParameters": {
+          "parameters": [
+            {
+              "name": "chat_id",
+              "value": "={{ $json.chat_id }}"
+            },
+            {
+              "name": "text",
+              "value": "={{ $json.message_text }}"
+            }
+          ]
+        },
+        "options": {}
+      },
+      "id": "cg-st03",
+      "name": "Telegram Stats",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [
+        2020,
+        1500
+      ]
+    },
+    {
+      "parameters": {
+        "method": "DELETE",
+        "url": "=https://xkxjocoaqtiaevjbdwhe.supabase.co/rest/v1/copys_generados?usuario_id=eq.{{ $json.user_id }}",
+        "sendHeaders": true,
+        "headerParameters": {
+          "parameters": [
+            {
+              "name": "apikey",
+              "value": "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6InhreGpvY29hcXRpYWV2amJkd2hlIiwicm9sZSI6ImFub24iLCJpYXQiOjE3NzUwODI4MDEsImV4cCI6MjA5MDY1ODgwMX0.6-stczeYYby01g1qDUz8jh99GwtUTa2oxaWrkmncs3Y"
+            },
+            {
+              "name": "Authorization",
+              "value": "Bearer eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6InhreGpvY29hcXRpYWV2amJkd2hlIiwicm9sZSI6ImFub24iLCJpYXQiOjE3NzUwODI4MDEsImV4cCI6MjA5MDY1ODgwMX0.6-stczeYYby01g1qDUz8jh99GwtUTa2oxaWrkmncs3Y"
+            }
+          ]
+        },
+        "options": {}
+      },
+      "id": "cg-r01",
+      "name": "SB Delete Copys",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [
+        1580,
+        1800
+      ]
+    },
+    {
+      "parameters": {
+        "method": "DELETE",
+        "url": "=https://xkxjocoaqtiaevjbdwhe.supabase.co/rest/v1/clientes?usuario_id=eq.{{ $('Router Comandos').item.json.user_id }}",
+        "sendHeaders": true,
+        "headerParameters": {
+          "parameters": [
+            {
+              "name": "apikey",
+              "value": "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6InhreGpvY29hcXRpYWV2amJkd2hlIiwicm9sZSI6ImFub24iLCJpYXQiOjE3NzUwODI4MDEsImV4cCI6MjA5MDY1ODgwMX0.6-stczeYYby01g1qDUz8jh99GwtUTa2oxaWrkmncs3Y"
+            },
+            {
+              "name": "Authorization",
+              "value": "Bearer eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6InhreGpvY29hcXRpYWV2amJkd2hlIiwicm9sZSI6ImFub24iLCJpYXQiOjE3NzUwODI4MDEsImV4cCI6MjA5MDY1ODgwMX0.6-stczeYYby01g1qDUz8jh99GwtUTa2oxaWrkmncs3Y"
+            }
+          ]
+        },
+        "options": {}
+      },
+      "id": "cg-r02",
+      "name": "SB Delete Cliente",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [
+        1800,
+        1800
+      ]
+    },
+    {
+      "parameters": {
+        "method": "POST",
+        "url": "=https://api.telegram.org/bot8778169998:AAEp0b4PZKPL504PgamTDDDsihnH5hUmHQ4/sendMessage",
+        "sendBody": true,
+        "bodyParameters": {
+          "parameters": [
+            {
+              "name": "chat_id",
+              "value": "={{ $('Router Comandos').item.json.chat_id }}"
+            },
+            {
+              "name": "text",
+              "value": "✅ Tu información ha sido borrada.\\n\\nPara empezar de nuevo:\\n/setup [google_drive_file_id]"
+            }
+          ]
+        },
+        "options": {}
+      },
+      "id": "cg-r03",
+      "name": "Telegram Reset OK",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [
+        2020,
+        1800
+      ]
+    },
+    {
+      "parameters": {
+        "method": "GET",
+        "url": "=https://xkxjocoaqtiaevjbdwhe.supabase.co/rest/v1/clientes?usuario_id=eq.{{ $json.user_id }}&activo=eq.true&select=patron_estructura,cliente_nombre,nicho",
+        "sendHeaders": true,
+        "headerParameters": {
+          "parameters": [
+            {
+              "name": "apikey",
+              "value": "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6InhreGpvY29hcXRpYWV2amJkd2hlIiwicm9sZSI6ImFub24iLCJpYXQiOjE3NzUwODI4MDEsImV4cCI6MjA5MDY1ODgwMX0.6-stczeYYby01g1qDUz8jh99GwtUTa2oxaWrkmncs3Y"
+            },
+            {
+              "name": "Authorization",
+              "value": "Bearer eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6InhreGpvY29hcXRpYWV2amJkd2hlIiwicm9sZSI6ImFub24iLCJpYXQiOjE3NzUwODI4MDEsImV4cCI6MjA5MDY1ODgwMX0.6-stczeYYby01g1qDUz8jh99GwtUTa2oxaWrkmncs3Y"
+            }
+          ]
+        },
+        "options": {}
+      },
+      "id": "cg-p01",
+      "name": "SB Read Pattern",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [
+        1580,
+        2100
+      ]
+    },
+    {
+      "parameters": {
+        "jsCode": "const parsed = $('Router Comandos').item.json;\nconst rows = Array.isArray($input.item.json) ? $input.item.json : [];\nconst cliente = rows[0] || null;\n\nif (!cliente?.patron_estructura) {\n  return [{ json: { chat_id: parsed.chat_id, message_text: '⚠️ No tienes perfil configurado. Usa /setup [file_id] para comenzar.' } }];\n}\n\nconst p = cliente.patron_estructura;\nconst palabras = Array.isArray(p.palabras_clave) ? p.palabras_clave.join(', ') : (p.palabras_clave || 'N/A');\nconst emociones = Array.isArray(p.emociones) ? p.emociones.join(', ') : (p.emociones || 'N/A');\n\nconst msg = `🎯 TU PATRÓN DE ESCRITURA\\n\\n📌 Cliente: ${cliente.cliente_nombre || 'N/A'}\\n🏷 Nicho: ${cliente.nicho || 'N/A'}\\n\\n🪝 COMIENZAS CON:\\n→ ${p.tipo_gancho || 'N/A'}\\n\\n📖 DESARROLLAS CON:\\n→ ${p.estructura_desarrollo || 'N/A'}\\n\\n🎯 CIERRAS CON:\\n→ ${p.tipo_cierre || 'N/A'}\\n\\n🗣 TONO:\\n→ ${p.tono_general || 'N/A'}\\n\\n🔑 PALABRAS CLAVE:\\n→ ${palabras}\\n\\n💡 EMOCIONES:\\n→ ${emociones}`;\n\nreturn [{ json: { chat_id: parsed.chat_id, message_text: msg } }];"
+      },
+      "id": "cg-p02",
+      "name": "Format Pattern",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        1800,
+        2100
+      ]
+    },
+    {
+      "parameters": {
+        "method": "POST",
+        "url": "=https://api.telegram.org/bot8778169998:AAEp0b4PZKPL504PgamTDDDsihnH5hUmHQ4/sendMessage",
+        "sendBody": true,
+        "bodyParameters": {
+          "parameters": [
+            {
+              "name": "chat_id",
+              "value": "={{ $json.chat_id }}"
+            },
+            {
+              "name": "text",
+              "value": "={{ $json.message_text }}"
+            }
+          ]
+        },
+        "options": {}
+      },
+      "id": "cg-p03",
+      "name": "Telegram Send Pattern",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [
+        2020,
+        2100
+      ]
+    },
+    {
+      "parameters": {
+        "method": "POST",
+        "url": "=https://api.telegram.org/bot8778169998:AAEp0b4PZKPL504PgamTDDDsihnH5hUmHQ4/sendMessage",
+        "sendBody": true,
+        "bodyParameters": {
+          "parameters": [
+            {
+              "name": "chat_id",
+              "value": "={{ $json.chat_id }}"
+            },
+            {
+              "name": "text",
+              "value": "❓ Comando no reconocido.\\n\\nUsa /help para ver los comandos disponibles."
+            }
+          ]
+        },
+        "options": {}
+      },
+      "id": "cg-unk",
+      "name": "Telegram Unknown",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [
+        1580,
+        2400
+      ]
+    }
+  ],
+  "connections": {
+    "Webhook": {
+      "main": [
+        [
+          {
+            "node": "Parse Telegram",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Parse Telegram": {
+      "main": [
+        [
+          {
+            "node": "Check Format",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Check Format": {
+      "main": [
+        [
+          {
+            "node": "Router Comandos",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "Build Intent Prompt",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Build Intent Prompt": {
+      "main": [
+        [
+          {
+            "node": "Gemini Detect Intent",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Gemini Detect Intent": {
+      "main": [
+        [
+          {
+            "node": "Parse Intent",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Parse Intent": {
+      "main": [
+        [
+          {
+            "node": "Router Comandos",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Router Comandos": {
+      "main": [
+        [
+          {
+            "node": "GDrive Download",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "SB Read Cliente Copy",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "Get Day",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "Build Help",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "SB Query Stats",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "SB Delete Copys",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "SB Read Pattern",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "Telegram Unknown",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "GDrive Download": {
+      "main": [
+        [
+          {
+            "node": "Extract Notebook Text",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Extract Notebook Text": {
+      "main": [
+        [
+          {
+            "node": "Build Extract Body",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Build Extract Body": {
+      "main": [
+        [
+          {
+            "node": "Gemini Extract Pattern",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Gemini Extract Pattern": {
+      "main": [
+        [
+          {
+            "node": "Parse Extract Response",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Parse Extract Response": {
+      "main": [
+        [
+          {
+            "node": "SB Upsert Cliente",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "SB Upsert Cliente": {
+      "main": [
+        [
+          {
+            "node": "Build Setup Confirm",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Build Setup Confirm": {
+      "main": [
+        [
+          {
+            "node": "Telegram Setup OK",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "SB Read Cliente Copy": {
+      "main": [
+        [
+          {
+            "node": "Build Generate Body",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Build Generate Body": {
+      "main": [
+        [
+          {
+            "node": "Gemini Generate Copy",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Gemini Generate Copy": {
+      "main": [
+        [
+          {
+            "node": "Extract Copy",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Extract Copy": {
+      "main": [
+        [
+          {
+            "node": "SB Insert Copy Stats",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "SB Insert Copy Stats": {
+      "main": [
+        [
+          {
+            "node": "Build Copy Message",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Build Copy Message": {
+      "main": [
+        [
+          {
+            "node": "Telegram Send Copy",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Get Day": {
+      "main": [
+        [
+          {
+            "node": "SB Read Cliente Hoy",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "SB Read Cliente Hoy": {
+      "main": [
+        [
+          {
+            "node": "Build Generate Hoy Body",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Build Generate Hoy Body": {
+      "main": [
+        [
+          {
+            "node": "Gemini Generate Hoy",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Gemini Generate Hoy": {
+      "main": [
+        [
+          {
+            "node": "Extract Copy Hoy",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Extract Copy Hoy": {
+      "main": [
+        [
+          {
+            "node": "SB Insert Hoy Stats",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "SB Insert Hoy Stats": {
+      "main": [
+        [
+          {
+            "node": "Build Copy Hoy Msg",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Build Copy Hoy Msg": {
+      "main": [
+        [
+          {
+            "node": "Telegram Send Copy Hoy",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Build Help": {
+      "main": [
+        [
+          {
+            "node": "Telegram Help",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "SB Query Stats": {
+      "main": [
+        [
+          {
+            "node": "Format Stats",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Format Stats": {
+      "main": [
+        [
+          {
+            "node": "Telegram Stats",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "SB Delete Copys": {
+      "main": [
+        [
+          {
+            "node": "SB Delete Cliente",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "SB Delete Cliente": {
+      "main": [
+        [
+          {
+            "node": "Telegram Reset OK",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "SB Read Pattern": {
+      "main": [
+        [
+          {
+            "node": "Format Pattern",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Format Pattern": {
+      "main": [
+        [
+          {
+            "node": "Telegram Send Pattern",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    }
+  },
+  "settings": {
+    "executionOrder": "v1",
+    "callerPolicy": "workflowsFromSameOwner",
+    "availableInMCP": false
+  },
+  "staticData": null,
+  "id": "YQohUDsC5vaPJrOe",
+  "active": true
+}
